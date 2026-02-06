@@ -1,0 +1,25 @@
+[Unit]
+Description=EnvisaLink 4 Syslog Listener
+Documentation=https://github.com/joshjohanning/envisalink-syslog-listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Port 514 requires root
+ExecStart=/usr/bin/node /home/pi/Repos/envisalink-syslog/envisalink-syslog.js
+WorkingDirectory=/home/pi/Repos/envisalink-syslog
+Restart=always
+RestartSec=10
+
+# Optional: Mailgun email alerts (uncomment and fill in)
+# Environment=MAILGUN_API_KEY=your_key
+# Environment=MAILGUN_DOMAIN=your_domain
+
+# Logging - stdout/stderr go to journalctl
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=envisalink-syslog
+
+[Install]
+WantedBy=multi-user.target

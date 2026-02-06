@@ -84,33 +84,42 @@ Edit `zones.json` to map zone numbers to friendly names:
 
 ## Running as a systemd service
 
-```sh
-sudo nano /etc/systemd/system/envisalink-syslog.service
-```
-
-```ini
-[Unit]
-Description=EnvisaLink Syslog Listener
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/node /home/pi/envisalink-syslog/envisalink-syslog.js
-WorkingDirectory=/home/pi/envisalink-syslog
-Restart=always
-RestartSec=10
-Environment=MAILGUN_API_KEY=your_key
-Environment=MAILGUN_DOMAIN=your_domain
-
-[Install]
-WantedBy=multi-user.target
-```
+A service file is included in the repo. Copy it and adjust the paths if needed:
 
 ```sh
+# Review/edit the service file — update paths if your repo is not at /home/pi/Repos/envisalink-syslog
+# Also uncomment the MAILGUN environment lines if you want email alerts
+nano envisalink-syslog.service
+
+# Copy to systemd
+sudo cp envisalink-syslog.service /etc/systemd/system/
+
+# Reload systemd, enable on boot, and start
 sudo systemctl daemon-reload
 sudo systemctl enable envisalink-syslog
 sudo systemctl start envisalink-syslog
-systemctl status envisalink-syslog
 ```
+
+### Managing the service
+
+```sh
+# Check status
+systemctl status envisalink-syslog
+
+# View logs (live)
+journalctl -u envisalink-syslog -f
+
+# View recent logs
+journalctl -u envisalink-syslog --since "1 hour ago"
+
+# Restart after config changes
+sudo systemctl restart envisalink-syslog
+
+# Stop
+sudo systemctl stop envisalink-syslog
+```
+
+> **Note:** If you edit the `.service` file after copying, re-copy it and run `sudo systemctl daemon-reload` before restarting.
 
 ## How it works
 
