@@ -37,6 +37,7 @@ const fs = require('fs');
 const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
+const { parseSyslogMessage, getZoneName } = require('./parser');
 
 const argv = yargs(hideBin(process.argv))
   .option('port', { type: 'number', default: 514, describe: 'UDP port to listen on' })
@@ -100,93 +101,14 @@ function logToFile(message) {
   if (DEBUG) console.log(line.trim());
 }
 
-function getZoneName(zoneNumber) {
-  const key = String(zoneNumber);
-  if (zones[key]) {
-    return `${zones[key]} (zone ${key})`;
-  }
-  return `zone ${key}`;
+function getZoneNameLocal(zoneNumber) {
+  return getZoneName(zones, zoneNumber);
 }
 
 // ---- Syslog message parsing ----
 
-// Syslog messages from the EVL4 look roughly like:
-//   <priority>timestamp hostname ENVISALINK[pid]: message content
-// The interesting part is after "ENVISALINK" (or similar app name).
-// Common messages include:
-//   Zone Open: 003       (zone 3 opened)
-//   Zone Close: 003      (zone 3 closed/restored)
-//   Alarm: ...           (alarm triggered)
-//   Armed: ...           (system armed)
-//   Disarmed: ...        (system disarmed)
-
-function parseSyslogMessage(raw) {
-  const result = {
-    raw: raw.trim(),
-    timestamp: new Date(),
-    event: null,
-    zone: null,
-    zoneName: null,
-    message: null
-  };
-
-  // Strip syslog header — find the content after "]: " or after the app name
-  let content = raw;
-
-  // Try to extract content after "]: "
-  const bracketIdx = raw.indexOf(']: ');
-  if (bracketIdx >= 0) {
-    content = raw.substring(bracketIdx + 3).trim();
-  } else {
-    // Try to find content after "ENVISALINK" or similar marker
-    const markers = ['ENVISALINK', 'envisalink', 'EVL4', 'evl4'];
-    for (const marker of markers) {
-      const idx = raw.indexOf(marker);
-      if (idx >= 0) {
-        content = raw.substring(idx + marker.length).trim();
-        // Strip leading colon or brackets
-        content = content.replace(/^[\[:\]\s]+/, '').trim();
-        break;
-      }
-    }
-  }
-
-  result.message = content;
-
-  // Parse zone events: "Zone Open: 003", "Zone Close: 003"
-  const zoneMatch = content.match(/Zone\s+(Open|Close|Alarm|Trouble|Tamper|Restore):\s*(\d+)/i);
-  if (zoneMatch) {
-    result.event = `Zone ${zoneMatch[1]}`;
-    result.zone = parseInt(zoneMatch[2], 10);
-    result.zoneName = getZoneName(result.zone);
-    return result;
-  }
-
-  // Parse arm/disarm events
-  if (/arm/i.test(content)) {
-    if (/disarm/i.test(content)) {
-      result.event = 'Disarmed';
-    } else if (/stay/i.test(content)) {
-      result.event = 'Armed Stay';
-    } else if (/away/i.test(content)) {
-      result.event = 'Armed Away';
-    } else if (/night|instant/i.test(content)) {
-      result.event = 'Armed Night';
-    } else {
-      result.event = 'Armed';
-    }
-    return result;
-  }
-
-  // Parse alarm events
-  if (/alarm/i.test(content)) {
-    result.event = 'Alarm';
-    return result;
-  }
-
-  // Catch-all — still log it
-  result.event = 'Other';
-  return result;
+function parseMessage(raw) {
+  return parseSyslogMessage(raw, zones);
 }
 
 // ---- Email ----
@@ -231,7 +153,7 @@ server.on('message', async (msg, rinfo) => {
     logToFile(`[RAW] from ${rinfo.address}:${rinfo.port} — ${raw.trim()}`);
   }
 
-  const parsed = parseSyslogMessage(raw);
+  const parsed = parseMessage(raw);
 
   // Build a friendly log line
   let logLine;

@@ -5,11 +5,16 @@
   "main": "envisalink-syslog.js",
   "scripts": {
     "start": "node envisalink-syslog.js",
-    "start:debug": "node envisalink-syslog.js --debug --dryRun"
+    "start:debug": "node envisalink-syslog.js --debug --dryRun",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "form-data": "^4.0.4",
     "mailgun.js": "^10.2.1",
     "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }
