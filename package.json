@@ -1,11 +1,11 @@
 {
-  "name": "envisalink-syslog",
+  "name": "envisalink-syslog-listener",
   "version": "1.0.0",
   "description": "Syslog listener for the EyezOn EnvisaLink 4 (EVL4) module. Logs zone events (door open/close, arm/disarm, alarms) over UDP with optional email alerts.",
-  "main": "envisalink-syslog.js",
+  "main": "envisalink-syslog-listener.js",
   "scripts": {
-    "start": "node envisalink-syslog.js",
-    "start:debug": "node envisalink-syslog.js --debug --dryRun",
+    "start": "node envisalink-syslog-listener.js",
+    "start:debug": "node envisalink-syslog-listener.js --debug --dryRun",
     "test": "jest",
     "test:watch": "jest --watch"
   },

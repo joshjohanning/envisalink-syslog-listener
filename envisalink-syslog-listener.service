@@ -7,8 +7,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 # Port 514 requires root
-ExecStart=/usr/bin/node /home/pi/Repos/envisalink-syslog/envisalink-syslog.js
-WorkingDirectory=/home/pi/Repos/envisalink-syslog
+ExecStart=/usr/bin/node /home/pi/envisalink-syslog-listener/envisalink-syslog-listener.js
+WorkingDirectory=/home/pi/envisalink-syslog-listener
 Restart=always
 RestartSec=10
 
@@ -19,7 +19,7 @@ RestartSec=10
 # Logging - stdout/stderr go to journalctl
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=envisalink-syslog
+SyslogIdentifier=envisalink-syslog-listener
 
 [Install]
 WantedBy=multi-user.target

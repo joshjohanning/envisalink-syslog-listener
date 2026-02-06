@@ -1,4 +1,4 @@
-# envisalink-syslog
+# envisalink-syslog-listener
 
 Syslog listener for the [EyezOn EnvisaLink 4 (EVL4)](https://www.eyezon.com/evl4.html) module. Logs zone events (door open/close, arm/disarm, alarms) over UDP with friendly zone names and optional Mailgun email alerts.
 
@@ -23,7 +23,7 @@ cp zones.sample.json zones.json
 nano zones.json
 
 # Test it (debug mode, no emails)
-sudo node envisalink-syslog.js --debug --dryRun
+sudo node envisalink-syslog-listener.js --debug --dryRun
 ```
 
 Open a door — you should see a log entry appear.
@@ -32,21 +32,21 @@ Open a door — you should see a log entry appear.
 
 ```sh
 # Basic — just log to file
-sudo node envisalink-syslog.js
+sudo node envisalink-syslog-listener.js
 
 # With email alerts on alarm events
-sudo node envisalink-syslog.js \
+sudo node envisalink-syslog-listener.js \
   --MAILGUN_API_KEY=your_key \
   --MAILGUN_DOMAIN=your_domain
 
 # Also email on every zone open (e.g., door opens)
-sudo node envisalink-syslog.js \
+sudo node envisalink-syslog-listener.js \
   --MAILGUN_API_KEY=your_key \
   --MAILGUN_DOMAIN=your_domain \
   --emailOnOpen
 
 # Debug mode (verbose console output)
-sudo node envisalink-syslog.js --debug --dryRun
+sudo node envisalink-syslog-listener.js --debug --dryRun
 ```
 
 ### Options
@@ -54,7 +54,7 @@ sudo node envisalink-syslog.js --debug --dryRun
 | Option | Default | Description |
 |---|---|---|
 | `--port` | `514` | UDP port to listen on (514 requires `sudo`) |
-| `--logPath` | `./envisalink-syslog.log` | Path to the log file |
+| `--logPath` | `./envisalink-syslog-listener.log` | Path to the log file |
 | `--zonesPath` | `./zones.json` | Path to zone name mappings |
 | `--debug` | `false` | Enable verbose console output |
 | `--dryRun` | `false` | Skip sending emails |
@@ -66,7 +66,7 @@ sudo node envisalink-syslog.js --debug --dryRun
 > **Note:** Port 514 requires root/`sudo`. Alternatively, use a higher port and redirect with iptables:
 > ```sh
 > sudo iptables -t nat -A PREROUTING -p udp --dport 514 -j REDIRECT --to-port 5514
-> node envisalink-syslog.js --port 5514
+> node envisalink-syslog-listener.js --port 5514
 > ```
 
 ## Zone Configuration
@@ -95,36 +95,36 @@ nano zones.json
 A service file is included in the repo. Copy it and adjust the paths if needed:
 
 ```sh
-# Review/edit the service file — update paths if your repo is not at /home/pi/Repos/envisalink-syslog
+# Review/edit the service file — update paths if your repo is not at /home/pi/envisalink-syslog-listener
 # Also uncomment the MAILGUN environment lines if you want email alerts
-nano envisalink-syslog.service
+nano envisalink-syslog-listener.service
 
 # Copy to systemd
-sudo cp envisalink-syslog.service /etc/systemd/system/
+sudo cp envisalink-syslog-listener.service /etc/systemd/system/
 
 # Reload systemd, enable on boot, and start
 sudo systemctl daemon-reload
-sudo systemctl enable envisalink-syslog
-sudo systemctl start envisalink-syslog
+sudo systemctl enable envisalink-syslog-listener
+sudo systemctl start envisalink-syslog-listener
 ```
 
 ### Managing the service
 
 ```sh
 # Check status
-systemctl status envisalink-syslog
+systemctl status envisalink-syslog-listener
 
 # View logs (live)
-journalctl -u envisalink-syslog -f
+journalctl -u envisalink-syslog-listener -f
 
 # View recent logs
-journalctl -u envisalink-syslog --since "1 hour ago"
+journalctl -u envisalink-syslog-listener --since "1 hour ago"
 
 # Restart after config changes
-sudo systemctl restart envisalink-syslog
+sudo systemctl restart envisalink-syslog-listener
 
 # Stop
-sudo systemctl stop envisalink-syslog
+sudo systemctl stop envisalink-syslog-listener
 ```
 
 > **Note:** If you edit the `.service` file after copying, re-copy it and run `sudo systemctl daemon-reload` before restarting.

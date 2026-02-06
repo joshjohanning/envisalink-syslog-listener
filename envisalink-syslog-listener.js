@@ -11,11 +11,11 @@
 //   2. Configure zones.json with your zone numbers and names
 //
 // Usage:
-//   sudo node envisalink-syslog.js [options]
+//   sudo node envisalink-syslog-listener.js [options]
 //
 //   Options:
 //     --port              UDP port to listen on (default: 514, requires sudo)
-//     --logPath           Path to the log file (default: ./envisalink-syslog.log)
+//     --logPath           Path to the log file (default: ./envisalink-syslog-listener.log)
 //     --zonesPath         Path to zones.json (default: ./zones.json)
 //     --debug             Enable debug logging to console (default: false)
 //     --dryRun            Skip sending emails (default: false)
@@ -41,7 +41,7 @@ const { parseSyslogMessage, getZoneName } = require('./parser');
 
 const argv = yargs(hideBin(process.argv))
   .option('port', { type: 'number', default: 514, describe: 'UDP port to listen on' })
-  .option('logPath', { type: 'string', default: path.join(__dirname, 'envisalink-syslog.log'), describe: 'Log file path' })
+  .option('logPath', { type: 'string', default: path.join(__dirname, 'envisalink-syslog-listener.log'), describe: 'Log file path' })
   .option('zonesPath', { type: 'string', default: path.join(__dirname, 'zones.json'), describe: 'Path to zones.json' })
   .option('debug', { type: 'boolean', default: false, describe: 'Enable debug output' })
   .option('dryRun', { type: 'boolean', default: false, describe: 'Skip sending emails' })
@@ -144,7 +144,7 @@ const server = dgram.createSocket('udp4');
 server.on('error', (err) => {
   logToFile(`Server error: ${err.message}`);
   if (err.code === 'EACCES') {
-    logToFile('Permission denied — port 514 requires sudo. Try: sudo node envisalink-syslog.js');
+    logToFile('Permission denied — port 514 requires sudo. Try: sudo node envisalink-syslog-listener.js');
     logToFile('Or use a higher port with --port 5514 and redirect with iptables.');
   }
   server.close();
