@@ -23,6 +23,7 @@
 //     --MAILGUN_DOMAIN    Mailgun domain (or set env var)
 //     --emailOnOpen       Send email when a zone opens (default: false)
 //     --emailOnAlarm      Send email on alarm events (default: true)
+//     --GOOGLE_SHEETS_WEBHOOK  Google Apps Script URL for logging to Sheets
 //
 // Note: Port 514 requires root/sudo. Alternatively, use a higher port and
 //       redirect with iptables:
@@ -49,6 +50,7 @@ const argv = yargs(hideBin(process.argv))
   .option('MAILGUN_DOMAIN', { type: 'string', default: '', describe: 'Mailgun domain' })
   .option('emailOnOpen', { type: 'boolean', default: false, describe: 'Send email when a zone opens' })
   .option('emailOnAlarm', { type: 'boolean', default: true, describe: 'Send email on alarm events' })
+  .option('GOOGLE_SHEETS_WEBHOOK', { type: 'string', default: '', describe: 'Google Apps Script web app URL for logging to Google Sheets' })
   .argv;
 
 // Resolve config
@@ -61,6 +63,7 @@ const MAILGUN_API_KEY = argv.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '
 const MAILGUN_DOMAIN = argv.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
 const EMAIL_ON_OPEN = argv.emailOnOpen;
 const EMAIL_ON_ALARM = argv.emailOnAlarm;
+const GOOGLE_SHEETS_WEBHOOK = argv.GOOGLE_SHEETS_WEBHOOK || process.env.GOOGLE_SHEETS_WEBHOOK || '';
 
 // Optional mailgun setup — only require if we need it
 let mg = null;
@@ -137,6 +140,52 @@ async function sendAlert(subject, text) {
   }
 }
 
+// ---- Google Sheets webhook ----
+
+async function postToGoogleSheets(parsed) {
+  if (!GOOGLE_SHEETS_WEBHOOK) return;
+  if (DRY_RUN) {
+    logToFile(`[DRY RUN] Would post to Google Sheets: ${parsed.event}`);
+    return;
+  }
+
+  const payload = JSON.stringify({
+    timestamp: formatLocalTime(parsed.timestamp),
+    event: parsed.event,
+    zone: parsed.zone,
+    zoneName: parsed.zoneName || '',
+    message: parsed.message,
+    raw: parsed.raw
+  });
+
+  try {
+    const url = new URL(GOOGLE_SHEETS_WEBHOOK);
+    const https = require('https');
+    await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+      }, (res) => {
+        // Google Apps Script redirects (302) on success - follow it
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          https.get(res.headers.location, (r) => { r.resume(); resolve(); });
+        } else {
+          res.resume();
+          resolve();
+        }
+      });
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
+    });
+    if (DEBUG) logToFile('Posted to Google Sheets');
+  } catch (err) {
+    logToFile(`Failed to post to Google Sheets: ${err.message}`);
+  }
+}
+
 // ---- Main UDP server ----
 
 const server = dgram.createSocket('udp4');
@@ -170,6 +219,9 @@ server.on('message', async (msg, rinfo) => {
 
   logToFile(logLine);
 
+  // Post to Google Sheets
+  await postToGoogleSheets(parsed);
+
   // Send email alerts based on configuration
   if (EMAIL_ON_ALARM && parsed.event === 'Alarm') {
     await sendAlert(
@@ -197,7 +249,12 @@ server.on('listening', () => {
   } else if (DRY_RUN) {
     console.log('Mailgun: dry-run mode (emails will be skipped)');
   } else {
-    console.log('Mailgun: not configured (no API key/domain — email alerts disabled)');
+    console.log('Mailgun: not configured (no API key/domain - email alerts disabled)');
+  }
+  if (GOOGLE_SHEETS_WEBHOOK) {
+    console.log('Google Sheets: configured');
+  } else {
+    console.log('Google Sheets: not configured (no webhook URL)');
   }
 });
 

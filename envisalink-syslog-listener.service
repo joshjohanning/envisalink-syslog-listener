@@ -16,6 +16,9 @@ RestartSec=10
 # Environment=MAILGUN_API_KEY=your_key
 # Environment=MAILGUN_DOMAIN=your_domain
 
+# Optional: Google Sheets logging (uncomment and fill in)
+# Environment=GOOGLE_SHEETS_WEBHOOK=https://script.google.com/macros/s/your_script_id/exec
+
 # Logging - stdout/stderr go to journalctl
 StandardOutput=journal
 StandardError=journal

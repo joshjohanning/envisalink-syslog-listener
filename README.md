@@ -62,8 +62,10 @@ sudo node envisalink-syslog-listener.js --debug --dryRun
 | `--MAILGUN_DOMAIN` | env var | Mailgun domain |
 | `--emailOnOpen` | `false` | Send email when any zone opens |
 | `--emailOnAlarm` | `true` | Send email on alarm events |
+| `--GOOGLE_SHEETS_WEBHOOK` | env var | Google Apps Script web app URL for logging to Sheets |
 
 > **Note:** Port 514 requires root/`sudo`. Alternatively, use a higher port and redirect with iptables:
+>
 > ```sh
 > sudo iptables -t nat -A PREROUTING -p udp --dport 514 -j REDIRECT --to-port 5514
 > node envisalink-syslog-listener.js --port 5514
@@ -88,6 +90,33 @@ nano zones.json
   "4": "Living Room Motion",
   "5": "Master Bedroom Window"
 }
+```
+
+## Google Sheets Logging
+
+You can log all events to a Google Sheet for easy access from anywhere - no SSH or VPN required.
+
+### Sheets Setup
+
+1. Create a new [Google Sheet](https://sheets.new)
+2. Add headers in **Row 1**: `Timestamp` | `Event` | `Zone` | `Zone Name` | `Message`
+3. Open **Extensions > Apps Script**
+4. Paste the contents of [`google-apps-script.js`](google-apps-script.js) (replacing any existing code)
+5. Click **Deploy > New deployment**
+6. Set type to **Web app**
+7. Set "Who has access" to **Anyone**
+8. Click **Deploy** and copy the web app URL
+9. Pass the URL to the listener:
+
+```sh
+sudo node envisalink-syslog-listener.js \
+  --GOOGLE_SHEETS_WEBHOOK=https://script.google.com/macros/s/ABC.../exec
+```
+
+Or set it as an environment variable in the systemd service file:
+
+```ini
+Environment=GOOGLE_SHEETS_WEBHOOK=https://script.google.com/macros/s/ABC.../exec
 ```
 
 ## Running as a systemd service
