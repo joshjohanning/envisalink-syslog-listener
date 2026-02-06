@@ -18,7 +18,8 @@ This uses the EVL4's built-in **syslog sender** (UDP port 514) — it does **not
 # Install dependencies
 npm install
 
-# Edit zones.json with your actual zone numbers and friendly names
+# Copy the sample zones file and edit with your actual zone numbers and friendly names
+cp zones.sample.json zones.json
 nano zones.json
 
 # Test it (debug mode, no emails)
@@ -70,7 +71,14 @@ sudo node envisalink-syslog.js --debug --dryRun
 
 ## Zone Configuration
 
-Edit `zones.json` to map zone numbers to friendly names:
+Copy `zones.sample.json` to `zones.json` and edit with your actual zone numbers and friendly names:
+
+```sh
+cp zones.sample.json zones.json
+nano zones.json
+```
+
+> **Note:** If `zones.json` doesn't exist on startup, the app automatically creates it from `zones.sample.json` as a fallback.
 
 ```json
 {

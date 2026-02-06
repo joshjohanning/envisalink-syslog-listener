@@ -71,8 +71,13 @@ if (!DRY_RUN && MAILGUN_API_KEY && MAILGUN_DOMAIN) {
   mg = mailgun.client({ username: 'api', key: MAILGUN_API_KEY });
 }
 
-// Load zone names
+// Load zone names — auto-create zones.json from sample if it doesn't exist
+const ZONES_SAMPLE_PATH = path.join(__dirname, 'zones.sample.json');
 let zones = {};
+if (!fs.existsSync(ZONES_PATH) && fs.existsSync(ZONES_SAMPLE_PATH)) {
+  fs.copyFileSync(ZONES_SAMPLE_PATH, ZONES_PATH);
+  logToFile(`Created ${ZONES_PATH} from ${ZONES_SAMPLE_PATH} — edit it with your actual zone names`);
+}
 try {
   const raw = fs.readFileSync(ZONES_PATH, 'utf8');
   zones = JSON.parse(raw);
