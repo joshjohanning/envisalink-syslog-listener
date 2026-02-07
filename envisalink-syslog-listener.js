@@ -51,6 +51,7 @@ const argv = yargs(hideBin(process.argv))
   .option('emailOnOpen', { type: 'boolean', default: false, describe: 'Send email when a zone opens' })
   .option('emailOnAlarm', { type: 'boolean', default: true, describe: 'Send email on alarm events' })
   .option('GOOGLE_SHEETS_WEBHOOK', { type: 'string', default: '', describe: 'Google Apps Script web app URL for logging to Google Sheets' })
+  .option('rulesPath', { type: 'string', default: path.join(__dirname, 'rules.json'), describe: 'Path to alert rules config' })
   .argv;
 
 // Resolve config
@@ -64,6 +65,7 @@ const MAILGUN_DOMAIN = argv.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
 const EMAIL_ON_OPEN = argv.emailOnOpen;
 const EMAIL_ON_ALARM = argv.emailOnAlarm;
 const GOOGLE_SHEETS_WEBHOOK = argv.GOOGLE_SHEETS_WEBHOOK || process.env.GOOGLE_SHEETS_WEBHOOK || '';
+const RULES_PATH = argv.rulesPath;
 
 // Optional mailgun setup — only require if we need it
 let mg = null;
@@ -88,6 +90,25 @@ try {
 } catch (err) {
   logToFile(`Warning: Could not load zones file (${ZONES_PATH}): ${err.message}. Zone numbers will be used as-is.`);
 }
+
+// Load alert rules -- auto-create rules.json from sample if it doesn't exist
+const RULES_SAMPLE_PATH = path.join(__dirname, 'rules.sample.json');
+let rules = [];
+if (!fs.existsSync(RULES_PATH) && fs.existsSync(RULES_SAMPLE_PATH)) {
+  fs.copyFileSync(RULES_SAMPLE_PATH, RULES_PATH);
+  logToFile(`Created ${RULES_PATH} from ${RULES_SAMPLE_PATH} -- edit it with your alert rules`);
+}
+try {
+  const raw = fs.readFileSync(RULES_PATH, 'utf8');
+  rules = JSON.parse(raw);
+  logToFile(`Loaded ${rules.length} alert rule(s) from ${RULES_PATH}`);
+} catch (err) {
+  logToFile(`No alert rules loaded (${RULES_PATH}): ${err.message}`);
+}
+
+// Zone state tracking for duration-based rules
+const zoneOpenTimers = {};  // zone -> setTimeout ID
+const zoneOpenTimes = {};   // zone -> Date when opened
 
 // ---- Helpers ----
 
@@ -186,6 +207,58 @@ async function postToGoogleSheets(parsed) {
   }
 }
 
+// ---- Alert rules engine ----
+
+function evaluateRules(parsed) {
+  if (rules.length === 0 || parsed.zone === null) return;
+
+  const zoneKey = String(parsed.zone);
+
+  if (parsed.event === 'Zone Open') {
+    // Find any open_duration rules for this zone
+    const matchingRules = rules.filter(r => r.condition === 'open_duration' && String(r.zone) === zoneKey);
+
+    for (const rule of matchingRules) {
+      const delayMs = (rule.minutes || 20) * 60 * 1000;
+      const zoneName = getZoneNameLocal(zoneKey);
+
+      // Clear any existing timer for this zone
+      if (zoneOpenTimers[zoneKey]) {
+        clearTimeout(zoneOpenTimers[zoneKey]);
+      }
+
+      zoneOpenTimes[zoneKey] = new Date();
+
+      zoneOpenTimers[zoneKey] = setTimeout(async () => {
+        const openedAt = zoneOpenTimes[zoneKey];
+        logToFile(`Alert rule triggered: ${zoneName} has been open for ${rule.minutes} minutes`);
+
+        if (rule.action === 'email') {
+          await sendAlert(
+            `⚠️ ${zoneName} open for ${rule.minutes}+ minutes`,
+            `${zoneName} has been open since ${formatLocalTime(openedAt)}.\n\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}\nDuration: ${rule.minutes} minutes`
+          );
+        }
+
+        delete zoneOpenTimers[zoneKey];
+        delete zoneOpenTimes[zoneKey];
+      }, delayMs);
+
+      if (DEBUG) logToFile(`Timer set: ${zoneName} will alert in ${rule.minutes} min if not closed`);
+    }
+  }
+
+  if (parsed.event === 'Zone Close') {
+    // Cancel any pending timer for this zone
+    if (zoneOpenTimers[zoneKey]) {
+      clearTimeout(zoneOpenTimers[zoneKey]);
+      delete zoneOpenTimers[zoneKey];
+      delete zoneOpenTimes[zoneKey];
+      if (DEBUG) logToFile(`Timer cleared: zone ${zoneKey} closed before alert`);
+    }
+  }
+}
+
 // ---- Main UDP server ----
 
 const server = dgram.createSocket('udp4');
@@ -222,6 +295,9 @@ server.on('message', async (msg, rinfo) => {
   // Post to Google Sheets
   await postToGoogleSheets(parsed);
 
+  // Evaluate alert rules (e.g., zone open too long)
+  evaluateRules(parsed);
+
   // Send email alerts based on configuration
   if (EMAIL_ON_ALARM && parsed.event === 'Alarm') {
     await sendAlert(
@@ -255,6 +331,11 @@ server.on('listening', () => {
     console.log('Google Sheets: configured');
   } else {
     console.log('Google Sheets: not configured (no webhook URL)');
+  }
+  if (rules.length > 0) {
+    console.log(`Alert rules: ${rules.length} rule(s) loaded from ${RULES_PATH}`);
+  } else {
+    console.log('Alert rules: none loaded');
   }
 });
 

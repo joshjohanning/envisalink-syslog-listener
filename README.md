@@ -63,6 +63,7 @@ sudo node envisalink-syslog-listener.js --debug --dryRun
 | `--emailOnOpen` | `false` | Send email when any zone opens |
 | `--emailOnAlarm` | `true` | Send email on alarm events |
 | `--GOOGLE_SHEETS_WEBHOOK` | env var | Google Apps Script web app URL for logging to Sheets |
+| `--rulesPath` | `./rules.json` | Path to alert rules config |
 
 > **Note:** Port 514 requires root/`sudo`. Alternatively, use a higher port and redirect with iptables:
 >
@@ -97,6 +98,46 @@ nano zones.json
   "5": "Master Bedroom Window"
 }
 ```
+
+## Alert Rules
+
+You can define rules that trigger email alerts based on zone behavior. Copy the sample file and customize:
+
+```sh
+cp rules.sample.json rules.json
+nano rules.json
+```
+
+> **Note:** If `rules.json` doesn't exist on startup, the app automatically creates it from `rules.sample.json` as a fallback.
+
+> **Note:** Changes to `rules.json` require a restart of the app or service to take effect.
+
+### Supported conditions
+
+#### `open_duration`
+
+Send an email if a zone stays open for longer than a specified number of minutes. The alert is cancelled if the zone closes before the timer expires.
+
+```json
+[
+  {
+    "description": "Alert if the garage doors are left open for more than 20 minutes",
+    "zone": "3",
+    "condition": "open_duration",
+    "minutes": 20,
+    "action": "email"
+  },
+  {
+    "description": "Alert if the back door is left open for more than 10 minutes",
+    "zone": "2",
+    "condition": "open_duration",
+    "minutes": 10,
+    "action": "email"
+  }
+]
+```
+
+Requires Mailgun to be configured for email alerts to send.
 
 ## Google Sheets Logging
 

@@ -1,3 +1,4 @@
 node_modules/
 *.log
 zones.json
+rules.json
