@@ -7,7 +7,7 @@
 // Prerequisites:
 //   1. In the EVL4 web interface (http://<EVL4-IP>/), set the Syslog Client:
 //      - Server IP Address: your Raspberry Pi's IP
-//      - Facility: any value 16-23 (e.g., 20) — 00 means OFF
+//      - Facility: any value 16-23 (e.g., 20) -- 00 means OFF
 //   2. Configure zones.json with your zone numbers and names
 //
 // Usage:
@@ -29,7 +29,7 @@
 //       redirect with iptables:
 //       sudo iptables -t nat -A PREROUTING -p udp --dport 514 -j REDIRECT --to-port 5514
 //
-// This does NOT use the TPI connection (port 4025) — it uses the EVL4's
+// This does NOT use the TPI connection (port 4025) -- it uses the EVL4's
 // built-in syslog sender over UDP, so it will not conflict with Homebridge
 // or any other TPI client.
 
@@ -69,7 +69,7 @@ const GOOGLE_SHEETS_WEBHOOK = argv.GOOGLE_SHEETS_WEBHOOK || process.env.GOOGLE_S
 const NTFY_TOPIC = argv.NTFY_TOPIC || process.env.NTFY_TOPIC || '';
 const RULES_PATH = argv.rulesPath;
 
-// Optional mailgun setup — only require if we need it
+// Optional mailgun setup -- only require if we need it
 let mg = null;
 if (!DRY_RUN && MAILGUN_API_KEY && MAILGUN_DOMAIN) {
   const Mailgun = require('mailgun.js');
@@ -78,12 +78,12 @@ if (!DRY_RUN && MAILGUN_API_KEY && MAILGUN_DOMAIN) {
   mg = mailgun.client({ username: 'api', key: MAILGUN_API_KEY });
 }
 
-// Load zone names — auto-create zones.json from sample if it doesn't exist
+// Load zone names -- auto-create zones.json from sample if it doesn't exist
 const ZONES_SAMPLE_PATH = path.join(__dirname, 'zones.sample.json');
 let zones = {};
 if (!fs.existsSync(ZONES_PATH) && fs.existsSync(ZONES_SAMPLE_PATH)) {
   fs.copyFileSync(ZONES_SAMPLE_PATH, ZONES_PATH);
-  logToFile(`Created ${ZONES_PATH} from ${ZONES_SAMPLE_PATH} — edit it with your actual zone names`);
+  logToFile(`Created ${ZONES_PATH} from ${ZONES_SAMPLE_PATH} -- edit it with your actual zone names`);
 }
 try {
   const raw = fs.readFileSync(ZONES_PATH, 'utf8');
@@ -312,7 +312,7 @@ const server = dgram.createSocket('udp4');
 server.on('error', (err) => {
   logToFile(`Server error: ${err.message}`);
   if (err.code === 'EACCES') {
-    logToFile('Permission denied — port 514 requires sudo. Try: sudo node envisalink-syslog-listener.js');
+    logToFile('Permission denied -- port 514 requires sudo. Try: sudo node envisalink-syslog-listener.js');
     logToFile('Or use a higher port with --port 5514 and redirect with iptables.');
   }
   server.close();
@@ -323,7 +323,7 @@ server.on('message', async (msg, rinfo) => {
   const raw = msg.toString('utf8');
 
   if (DEBUG) {
-    logToFile(`[RAW] from ${rinfo.address}:${rinfo.port} — ${raw.trim()}`);
+    logToFile(`[RAW] from ${rinfo.address}:${rinfo.port} -- ${raw.trim()}`);
   }
 
   const parsed = parseMessage(raw);
@@ -331,7 +331,7 @@ server.on('message', async (msg, rinfo) => {
   // Build a friendly log line
   let logLine;
   if (parsed.zone !== null) {
-    logLine = `${parsed.event}: ${parsed.zoneName} — ${parsed.message}`;
+    logLine = `${parsed.event}: ${parsed.zoneName} -- ${parsed.message}`;
   } else {
     logLine = `${parsed.event}: ${parsed.message}`;
   }

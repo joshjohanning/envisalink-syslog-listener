@@ -1,8 +1,8 @@
 # envisalink-syslog-listener
 
-Syslog listener for the [EyezOn EnvisaLink 4 (EVL4)](https://www.eyezon.com/evl4.html) module. Logs zone events (door open/close, arm/disarm, alarms) over UDP with friendly zone names and optional Mailgun email alerts.
+Syslog listener for the [EyezOn EnvisaLink 4 (EVL4)](https://www.eyezon.com/evl4.html) module. Logs zone events (door open/close, arm/disarm, alarms, CID events) over UDP with friendly zone names, optional email alerts (Mailgun), push notifications ([ntfy.sh](https://ntfy.sh)), Google Sheets logging, and configurable alert rules.
 
-This uses the EVL4's built-in **syslog sender** (UDP port 514) — it does **not** use the TPI connection (port 4025), so it won't conflict with Homebridge, Home Assistant, or any other TPI client.
+This uses the EVL4's built-in **syslog sender** (UDP port 514) -- it does **not** use the TPI connection (port 4025), so it won't conflict with Homebridge, Home Assistant, or any other TPI client.
 
 ## EVL4 Configuration
 
@@ -26,12 +26,12 @@ nano zones.json
 sudo node envisalink-syslog-listener.js --debug --dryRun
 ```
 
-Open a door — you should see a log entry appear.
+Open a door -- you should see a log entry appear.
 
 ## Usage
 
 ```sh
-# Basic — just log to file
+# Basic -- just log to file
 sudo node envisalink-syslog-listener.js
 
 # With email alerts on alarm events
@@ -109,7 +109,7 @@ cp rules.sample.json rules.json
 nano rules.json
 ```
 
-> **Note:** If `rules.json` doesn't exist on startup, the app automatically creates it from `rules.sample.json` as a fallback.
+> **Note:** Unlike `zones.json`, `rules.json` is **not** auto-created on startup. Rules are optional -- the app works fine without them.
 
 > **Note:** Changes to `rules.json` require a restart of the app or service to take effect.
 
@@ -117,19 +117,27 @@ nano rules.json
 
 #### `open_duration`
 
-Send an email if a zone stays open for longer than a specified number of minutes. The alert is cancelled if the zone closes before the timer expires.
+Send an alert if a zone stays open for longer than a specified number of minutes. The alert is cancelled if the zone closes before the timer expires.
+
+The `action` field controls how you're notified:
+
+| Action | Description |
+|---|---|
+| `email` | Send an email via Mailgun |
+| `ntfy` | Send a push notification via [ntfy.sh](https://ntfy.sh) |
+| `both` | Send both email and push notification |
 
 ```json
 [
   {
-    "description": "Alert if the garage doors are left open for more than 20 minutes",
+    "description": "Push notification if garage doors are left open 20+ minutes",
     "zone": "3",
     "condition": "open_duration",
     "minutes": 20,
-    "action": "email"
+    "action": "ntfy"
   },
   {
-    "description": "Alert if the back door is left open for more than 10 minutes",
+    "description": "Email if back door is left open 10+ minutes",
     "zone": "2",
     "condition": "open_duration",
     "minutes": 10,
@@ -138,7 +146,31 @@ Send an email if a zone stays open for longer than a specified number of minutes
 ]
 ```
 
-Requires Mailgun to be configured for email alerts to send.
+Requires Mailgun for `email`/`both` actions, and `--NTFY_TOPIC` for `ntfy`/`both` actions.
+
+## Push Notifications (ntfy.sh)
+
+[ntfy.sh](https://ntfy.sh) provides free push notifications to your phone with no account required.
+
+### ntfy Setup
+
+1. Install the **ntfy** app on your phone ([iOS](https://apps.apple.com/us/app/ntfy/id1625396347) / [Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy))
+2. In the app, subscribe to a topic (e.g., `my-envisalink-alerts`)
+3. Enable **Instant delivery** in the ntfy app settings
+4. Enable **Background App Refresh** for ntfy in your phone's settings
+5. Pass the same topic name to the listener:
+
+```sh
+sudo node envisalink-syslog-listener.js --NTFY_TOPIC=my-envisalink-alerts
+```
+
+Or set it as an environment variable in the systemd service file:
+
+```ini
+Environment=NTFY_TOPIC=my-envisalink-alerts
+```
+
+> **Tip:** Your topic name is the only thing keeping notifications private. Use something unique and hard to guess.
 
 ## Google Sheets Logging
 
@@ -172,7 +204,7 @@ Environment=GOOGLE_SHEETS_WEBHOOK=https://script.google.com/macros/s/ABC.../exec
 A service file is included in the repo. Copy it and adjust the paths if needed:
 
 ```sh
-# Review/edit the service file — update paths if your repo is not at /home/pi/envisalink-syslog-listener
+# Review/edit the service file -- update paths if your repo is not at /home/pi/envisalink-syslog-listener
 # Also uncomment the MAILGUN environment lines if you want email alerts
 nano envisalink-syslog-listener.service
 
@@ -238,8 +270,15 @@ npm test
 
 The EnvisaLink 4 has a built-in syslog client that sends zone events over UDP. This is completely separate from the TPI (Third Party Interface) on TCP port 4025. The syslog approach:
 
-- **No TPI conflict** — won't interfere with Homebridge, Home Assistant, or other TPI clients
-- **No connection limit** — UDP is fire-and-forget; any number of listeners can receive
-- **Zero impact on panel** — the EVL4 sends these passively alongside normal operations
+- **No TPI conflict** -- won't interfere with Homebridge, Home Assistant, or other TPI clients
+- **No connection limit** -- UDP is fire-and-forget; any number of listeners can receive
+- **Zero impact on panel** -- the EVL4 sends these passively alongside normal operations
 
-Events captured include zone open/close, arm/disarm, and alarm events.
+Events captured include:
+
+- **Zone events** -- open, close, alarm, trouble, tamper, restore
+- **Arm/disarm** -- via CID (Contact ID) events, including which user and partition
+- **Alarm events** -- fire, burglary, panic, medical, and more
+- **CID events** -- parsed from Ademco Contact ID protocol codes
+
+See [tpi-vs-syslog.md](tpi-vs-syslog.md) for a detailed comparison of syslog vs. TPI capabilities.
