@@ -4,6 +4,6 @@
     "zone": "3",
     "condition": "open_duration",
     "minutes": 20,
-    "action": "email"
+    "action": "ntfy"
   }
 ]

@@ -19,6 +19,9 @@ RestartSec=10
 # Optional: Google Sheets logging (uncomment and fill in)
 # Environment=GOOGLE_SHEETS_WEBHOOK=https://script.google.com/macros/s/your_script_id/exec
 
+# Optional: ntfy.sh push notifications (uncomment and fill in)
+# Environment=NTFY_TOPIC=my-envisalink-alerts
+
 # Logging - stdout/stderr go to journalctl
 StandardOutput=journal
 StandardError=journal

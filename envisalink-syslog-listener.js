@@ -51,6 +51,7 @@ const argv = yargs(hideBin(process.argv))
   .option('emailOnOpen', { type: 'boolean', default: false, describe: 'Send email when a zone opens' })
   .option('emailOnAlarm', { type: 'boolean', default: true, describe: 'Send email on alarm events' })
   .option('GOOGLE_SHEETS_WEBHOOK', { type: 'string', default: '', describe: 'Google Apps Script web app URL for logging to Google Sheets' })
+  .option('NTFY_TOPIC', { type: 'string', default: '', describe: 'ntfy.sh topic for push notifications (e.g., my-envisalink-alerts)' })
   .option('rulesPath', { type: 'string', default: path.join(__dirname, 'rules.json'), describe: 'Path to alert rules config' })
   .argv;
 
@@ -65,6 +66,7 @@ const MAILGUN_DOMAIN = argv.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
 const EMAIL_ON_OPEN = argv.emailOnOpen;
 const EMAIL_ON_ALARM = argv.emailOnAlarm;
 const GOOGLE_SHEETS_WEBHOOK = argv.GOOGLE_SHEETS_WEBHOOK || process.env.GOOGLE_SHEETS_WEBHOOK || '';
+const NTFY_TOPIC = argv.NTFY_TOPIC || process.env.NTFY_TOPIC || '';
 const RULES_PATH = argv.rulesPath;
 
 // Optional mailgun setup — only require if we need it
@@ -207,6 +209,42 @@ async function postToGoogleSheets(parsed) {
   }
 }
 
+// ---- ntfy.sh push notifications ----
+
+async function sendNtfy(title, message, priority) {
+  if (!NTFY_TOPIC) return;
+  if (DRY_RUN) {
+    logToFile(`[DRY RUN] Would send ntfy: ${title}`);
+    return;
+  }
+
+  try {
+    const https = require('https');
+    const payload = message;
+    await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: 'ntfy.sh',
+        path: `/${encodeURIComponent(NTFY_TOPIC)}`,
+        method: 'POST',
+        headers: {
+          'Title': title,
+          'Priority': priority || 'default',
+          'Tags': 'house'
+        }
+      }, (res) => {
+        res.resume();
+        resolve();
+      });
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
+    });
+    if (DEBUG) logToFile(`Sent ntfy: ${title}`);
+  } catch (err) {
+    logToFile(`Failed to send ntfy: ${err.message}`);
+  }
+}
+
 // ---- Alert rules engine ----
 
 function evaluateRules(parsed) {
@@ -239,7 +277,20 @@ function evaluateRules(parsed) {
             `${zoneName} has been open since ${formatLocalTime(openedAt)}.\n\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}\nDuration: ${rule.minutes} minutes`
           );
         }
+        if (rule.action === 'ntfy' || rule.action === 'both') {
+          await sendNtfy(
+            `${zoneName} open ${rule.minutes}+ min`,
+            `Open since ${formatLocalTime(openedAt)}`,
+            'high'
+          );
+        }
 
+        if (rule.action === 'both') {
+          await sendAlert(
+            `\u26a0\ufe0f ${zoneName} open for ${rule.minutes}+ minutes`,
+            `${zoneName} has been open since ${formatLocalTime(openedAt)}.\n\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}\nDuration: ${rule.minutes} minutes`
+          );
+        }
         delete zoneOpenTimers[zoneKey];
         delete zoneOpenTimes[zoneKey];
       }, delayMs);
@@ -331,6 +382,11 @@ server.on('listening', () => {
     console.log('Google Sheets: configured');
   } else {
     console.log('Google Sheets: not configured (no webhook URL)');
+  }
+  if (NTFY_TOPIC) {
+    console.log(`ntfy: configured (topic: ${NTFY_TOPIC})`);
+  } else {
+    console.log('ntfy: not configured (no topic)');
   }
   if (rules.length > 0) {
     console.log(`Alert rules: ${rules.length} rule(s) loaded from ${RULES_PATH}`);

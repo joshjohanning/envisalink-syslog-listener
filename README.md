@@ -63,6 +63,7 @@ sudo node envisalink-syslog-listener.js --debug --dryRun
 | `--emailOnOpen` | `false` | Send email when any zone opens |
 | `--emailOnAlarm` | `true` | Send email on alarm events |
 | `--GOOGLE_SHEETS_WEBHOOK` | env var | Google Apps Script web app URL for logging to Sheets |
+| `--NTFY_TOPIC` | env var | [ntfy.sh](https://ntfy.sh) topic for push notifications |
 | `--rulesPath` | `./rules.json` | Path to alert rules config |
 
 > **Note:** Port 514 requires root/`sudo`. Alternatively, use a higher port and redirect with iptables:
