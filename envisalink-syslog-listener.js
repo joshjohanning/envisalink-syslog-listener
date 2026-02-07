@@ -106,7 +106,7 @@ if (fs.existsSync(RULES_PATH)) {
 }
 
 // Zone state tracking for duration-based rules
-const zoneOpenTimers = {};  // zone -> setTimeout ID
+const zoneOpenTimers = {};  // "zone:ruleIndex" -> setTimeout ID
 const zoneOpenTimes = {};   // zone -> Date when opened
 
 // ---- Helpers ----
@@ -253,22 +253,25 @@ function evaluateRules(parsed) {
     // Find any open_duration rules for this zone
     const matchingRules = rules.filter(r => r.condition === 'open_duration' && String(r.zone) === zoneKey);
 
-    for (const rule of matchingRules) {
+    zoneOpenTimes[zoneKey] = new Date();
+
+    for (let i = 0; i < matchingRules.length; i++) {
+      const rule = matchingRules[i];
+      const ruleIndex = rules.indexOf(rule);
+      const timerKey = `${zoneKey}:${ruleIndex}`;
       const delayMs = (rule.minutes || 20) * 60 * 1000;
       const zoneName = getZoneNameLocal(zoneKey);
 
-      // Clear any existing timer for this zone
-      if (zoneOpenTimers[zoneKey]) {
-        clearTimeout(zoneOpenTimers[zoneKey]);
+      // Clear any existing timer for this specific rule
+      if (zoneOpenTimers[timerKey]) {
+        clearTimeout(zoneOpenTimers[timerKey]);
       }
 
-      zoneOpenTimes[zoneKey] = new Date();
-
-      zoneOpenTimers[zoneKey] = setTimeout(async () => {
+      zoneOpenTimers[timerKey] = setTimeout(async () => {
         const openedAt = zoneOpenTimes[zoneKey];
         logToFile(`Alert rule triggered: ${zoneName} has been open for ${rule.minutes} minutes`);
 
-        if (rule.action === 'email') {
+        if (rule.action === 'email' || rule.action === 'both') {
           await sendAlert(
             `⚠️ ${zoneName} open for ${rule.minutes}+ minutes`,
             `${zoneName} has been open since ${formatLocalTime(openedAt)}.\n\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}\nDuration: ${rule.minutes} minutes`
@@ -282,28 +285,23 @@ function evaluateRules(parsed) {
           );
         }
 
-        if (rule.action === 'both') {
-          await sendAlert(
-            `\u26a0\ufe0f ${zoneName} open for ${rule.minutes}+ minutes`,
-            `${zoneName} has been open since ${formatLocalTime(openedAt)}.\n\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}\nDuration: ${rule.minutes} minutes`
-          );
-        }
-        delete zoneOpenTimers[zoneKey];
-        delete zoneOpenTimes[zoneKey];
+        delete zoneOpenTimers[timerKey];
       }, delayMs);
 
-      if (DEBUG) logToFile(`Timer set: ${zoneName} will alert in ${rule.minutes} min if not closed`);
+      if (DEBUG) logToFile(`Timer set: ${zoneName} (rule ${ruleIndex}) will alert in ${rule.minutes} min if not closed`);
     }
   }
 
   if (parsed.event === 'Zone Close') {
-    // Cancel any pending timer for this zone
-    if (zoneOpenTimers[zoneKey]) {
-      clearTimeout(zoneOpenTimers[zoneKey]);
-      delete zoneOpenTimers[zoneKey];
-      delete zoneOpenTimes[zoneKey];
-      if (DEBUG) logToFile(`Timer cleared: zone ${zoneKey} closed before alert`);
+    // Cancel all pending timers for this zone
+    for (const key of Object.keys(zoneOpenTimers)) {
+      if (key.startsWith(`${zoneKey}:`)) {
+        clearTimeout(zoneOpenTimers[key]);
+        delete zoneOpenTimers[key];
+      }
     }
+    delete zoneOpenTimes[zoneKey];
+    if (DEBUG) logToFile(`Timer(s) cleared: zone ${zoneKey} closed before alert`);
   }
 }
 
