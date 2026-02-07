@@ -82,6 +82,12 @@ nano zones.json
 
 > **Note:** If `zones.json` doesn't exist on startup, the app automatically creates it from `zones.sample.json` as a fallback.
 
+> **Note:** Changes to `zones.json` require a restart of the app or service to take effect:
+>
+> ```sh
+> sudo systemctl restart envisalink-syslog-listener
+> ```
+
 ```json
 {
   "1": "Front Door",
@@ -157,6 +163,34 @@ sudo systemctl stop envisalink-syslog-listener
 ```
 
 > **Note:** If you edit the `.service` file after copying, re-copy it and run `sudo systemctl daemon-reload` before restarting.
+
+## Testing
+
+A test script is included to send fake EVL4 syslog messages to the listener without physically triggering a zone:
+
+```sh
+# Send a default "Zone Open: 9" to localhost
+node send-test-event.js
+
+# Send a custom event
+node send-test-event.js "Zone Closed: 4"
+node send-test-event.js "Armed Away"
+node send-test-event.js "Alarm Activated"
+
+# Send to a remote host (e.g., your Pi)
+node send-test-event.js --host 192.168.50.10 "Zone Open: 2"
+
+# Send to a non-default port
+node send-test-event.js --port 5514 "Zone Open: 1"
+```
+
+This sends a properly formatted syslog packet that the listener processes identically to a real EVL4 message, including logging to file, Google Sheets, and email alerts.
+
+To run the unit tests:
+
+```sh
+npm test
+```
 
 ## How it works
 
