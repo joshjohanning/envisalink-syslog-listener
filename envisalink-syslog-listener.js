@@ -148,13 +148,13 @@ async function sendAlert(subject, text) {
   }
 
   try {
-    await mg.messages.create(MAILGUN_DOMAIN, {
+    const result = await mg.messages.create(MAILGUN_DOMAIN, {
       from: 'EnvisaLink Syslog <soccerjoshj07+no_reply@gmail.com>',
       to: ['soccerjoshj07@gmail.com'],
       subject: subject,
       text: text
     });
-    logToFile(`Email sent: ${subject}`);
+    logToFile(`Email sent: ${subject} | Response: ${JSON.stringify(result)}`);
   } catch (err) {
     logToFile(`Failed to send email: ${err.message}`);
   }
