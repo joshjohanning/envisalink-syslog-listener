@@ -5,5 +5,12 @@
     "condition": "open_duration",
     "minutes": 20,
     "action": "ntfy"
+  },
+  {
+    "description": "Alert if the back door is left open for more than 10 minutes",
+    "zone": "2",
+    "condition": "open_duration",
+    "minutes": 10,
+    "action": "email"
   }
 ]

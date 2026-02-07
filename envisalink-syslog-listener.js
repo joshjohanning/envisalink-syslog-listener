@@ -93,19 +93,16 @@ try {
   logToFile(`Warning: Could not load zones file (${ZONES_PATH}): ${err.message}. Zone numbers will be used as-is.`);
 }
 
-// Load alert rules -- auto-create rules.json from sample if it doesn't exist
-const RULES_SAMPLE_PATH = path.join(__dirname, 'rules.sample.json');
+// Load alert rules (optional - no auto-create)
 let rules = [];
-if (!fs.existsSync(RULES_PATH) && fs.existsSync(RULES_SAMPLE_PATH)) {
-  fs.copyFileSync(RULES_SAMPLE_PATH, RULES_PATH);
-  logToFile(`Created ${RULES_PATH} from ${RULES_SAMPLE_PATH} -- edit it with your alert rules`);
-}
-try {
-  const raw = fs.readFileSync(RULES_PATH, 'utf8');
-  rules = JSON.parse(raw);
-  logToFile(`Loaded ${rules.length} alert rule(s) from ${RULES_PATH}`);
-} catch (err) {
-  logToFile(`No alert rules loaded (${RULES_PATH}): ${err.message}`);
+if (fs.existsSync(RULES_PATH)) {
+  try {
+    const raw = fs.readFileSync(RULES_PATH, 'utf8');
+    rules = JSON.parse(raw);
+    logToFile(`Loaded ${rules.length} alert rule(s) from ${RULES_PATH}`);
+  } catch (err) {
+    logToFile(`Warning: Could not load rules file (${RULES_PATH}): ${err.message}`);
+  }
 }
 
 // Zone state tracking for duration-based rules
