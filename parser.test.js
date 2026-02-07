@@ -13,20 +13,20 @@ const testZones = {
 
 describe('getZoneName', () => {
   test('returns friendly name for a known zone', () => {
-    expect(getZoneName(testZones, 1)).toBe('Front Door (zone 1)');
-    expect(getZoneName(testZones, 3)).toBe('Garage Door (zone 3)');
+    expect(getZoneName(testZones, 1)).toBe('Front Door');
+    expect(getZoneName(testZones, 3)).toBe('Garage Door');
   });
 
   test('returns friendly name when zone number is a string', () => {
-    expect(getZoneName(testZones, '9')).toBe('Master Bedroom Window (zone 9)');
+    expect(getZoneName(testZones, '9')).toBe('Master Bedroom Window');
   });
 
   test('returns generic name for an unknown zone', () => {
-    expect(getZoneName(testZones, 99)).toBe('zone 99');
+    expect(getZoneName(testZones, 99)).toBe('Zone 99');
   });
 
   test('returns generic name when zones dictionary is empty', () => {
-    expect(getZoneName({}, 1)).toBe('zone 1');
+    expect(getZoneName({}, 1)).toBe('Zone 1');
   });
 });
 
@@ -38,7 +38,7 @@ describe('parseSyslogMessage - zone events', () => {
     const result = parseSyslogMessage(raw, testZones);
     expect(result.event).toBe('Zone Open');
     expect(result.zone).toBe(3);
-    expect(result.zoneName).toBe('Garage Door (zone 3)');
+    expect(result.zoneName).toBe('Garage Door');
   });
 
   test('parses Zone Close with syslog header', () => {
@@ -46,7 +46,7 @@ describe('parseSyslogMessage - zone events', () => {
     const result = parseSyslogMessage(raw, testZones);
     expect(result.event).toBe('Zone Close');
     expect(result.zone).toBe(1);
-    expect(result.zoneName).toBe('Front Door (zone 1)');
+    expect(result.zoneName).toBe('Front Door');
   });
 
   test('parses Zone Open without syslog header', () => {
@@ -54,7 +54,7 @@ describe('parseSyslogMessage - zone events', () => {
     const result = parseSyslogMessage(raw, testZones);
     expect(result.event).toBe('Zone Open');
     expect(result.zone).toBe(2);
-    expect(result.zoneName).toBe('Back Door (zone 2)');
+    expect(result.zoneName).toBe('Back Door');
   });
 
   test('parses Zone Closed (with trailing d) as Zone Close', () => {
@@ -62,7 +62,7 @@ describe('parseSyslogMessage - zone events', () => {
     const result = parseSyslogMessage(raw, testZones);
     expect(result.event).toBe('Zone Close');
     expect(result.zone).toBe(9);
-    expect(result.zoneName).toBe('Master Bedroom Window (zone 9)');
+    expect(result.zoneName).toBe('Master Bedroom Window');
   });
 
   test('parses real EVL4 Zone Open message', () => {
@@ -70,14 +70,14 @@ describe('parseSyslogMessage - zone events', () => {
     const result = parseSyslogMessage(raw, testZones);
     expect(result.event).toBe('Zone Open');
     expect(result.zone).toBe(9);
-    expect(result.zoneName).toBe('Master Bedroom Window (zone 9)');
+    expect(result.zoneName).toBe('Master Bedroom Window');
   });
 
   test('parses zone with leading zeros', () => {
     const raw = '<134>Jan  1 12:00:00 evl4 ENVISALINK[1234]: Zone Open: 009';
     const result = parseSyslogMessage(raw, testZones);
     expect(result.zone).toBe(9);
-    expect(result.zoneName).toBe('Master Bedroom Window (zone 9)');
+    expect(result.zoneName).toBe('Master Bedroom Window');
   });
 
   test('parses unknown zone number gracefully', () => {
@@ -85,7 +85,7 @@ describe('parseSyslogMessage - zone events', () => {
     const result = parseSyslogMessage(raw, testZones);
     expect(result.event).toBe('Zone Open');
     expect(result.zone).toBe(42);
-    expect(result.zoneName).toBe('zone 42');
+    expect(result.zoneName).toBe('Zone 42');
   });
 
   test('parses Zone Alarm', () => {
@@ -207,7 +207,7 @@ describe('parseSyslogMessage - edge cases', () => {
     const result = parseSyslogMessage(raw, {});
     expect(result.event).toBe('Zone Open');
     expect(result.zone).toBe(1);
-    expect(result.zoneName).toBe('zone 1');
+    expect(result.zoneName).toBe('Zone 1');
   });
 
   test('handles message with null zones config', () => {
@@ -215,7 +215,7 @@ describe('parseSyslogMessage - edge cases', () => {
     const result = parseSyslogMessage(raw, null);
     expect(result.event).toBe('Zone Open');
     expect(result.zone).toBe(5);
-    expect(result.zoneName).toBe('zone 5');
+    expect(result.zoneName).toBe('Zone 5');
   });
 
   test('preserves raw message', () => {

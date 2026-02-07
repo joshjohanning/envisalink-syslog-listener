@@ -10,9 +10,9 @@
 function getZoneName(zones, zoneNumber) {
   const key = String(zoneNumber);
   if (zones[key]) {
-    return `${zones[key]} (zone ${key})`;
+    return zones[key];
   }
-  return `zone ${key}`;
+  return `Zone ${key}`;
 }
 
 /**
