@@ -14,18 +14,24 @@
 //   8. Click Deploy and copy the web app URL
 //   9. Pass the URL to the listener:
 //      --GOOGLE_SHEETS_WEBHOOK=https://script.google.com/macros/s/ABC.../exec
+//
+// New events are inserted at the top (row 2) so the most recent entry is
+// always visible first. To append to the bottom instead, replace the
+// insertRowBefore/setValues block with: sheet.appendRow([...]);
 
 function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = JSON.parse(e.postData.contents);
 
-  sheet.appendRow([
+  // Insert at row 2 (below headers) so newest events appear at the top
+  sheet.insertRowBefore(2);
+  sheet.getRange(2, 1, 1, 5).setValues([[
     data.timestamp,
     data.event,
     data.zone || '',
     data.zoneName || '',
     data.message
-  ]);
+  ]]);
 
   return ContentService
     .createTextOutput(JSON.stringify({ status: 'ok' }))
