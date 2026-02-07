@@ -19,16 +19,16 @@ Comparing the two methods of receiving events from an EnvisaLink 4 module.
 |---|---|---|
 | Door/window opened or closed | Yes (zone bitfield + keypad + CID) | Yes (`Zone Open: 003` / `Zone Close: 003`) |
 | Which zone, by number | Yes | Yes |
-| Arm / disarm | Yes (partition state + CID) | Yes |
-| Which **user** armed/disarmed | Yes (CID includes user number) | No |
+| Arm / disarm | Yes (partition state + CID) | Yes (CID events, e.g., `CID Event: 3441010020`) |
+| Which **user** armed/disarmed | Yes (CID includes user number) | Yes (CID includes user number) |
 | Alarm triggered | Yes | Yes |
-| Fire / smoke / CO / medical | Yes (specific CID codes 100-118) | May show as generic alarm |
-| Low battery on a sensor | Yes (keypad text "LOBAT" + CID 384) | No or limited |
-| AC power loss / restore | Yes (icon bitfield + CID 301/302) | No or limited |
+| Fire / smoke / CO / medical | Yes (specific CID codes 100-118) | Yes (CID codes sent via syslog) |
+| Low battery on a sensor | Yes (keypad text "LOBAT" + CID 384) | Possibly (if CID is sent) |
+| AC power loss / restore | Yes (icon bitfield + CID 301/302) | Yes (CID codes sent via syslog) |
 | Zone bypass status | Yes (keypad + CID 570) | No |
-| RF supervision loss | Yes (CID 381) | No |
-| Bell/siren trouble | Yes (CID 321) | No |
-| Tamper events | Yes (CID 341, 383) | No |
+| RF supervision loss | Yes (CID 381) | Possibly (if CID is sent) |
+| Bell/siren trouble | Yes (CID 321) | Possibly (if CID is sent) |
+| Tamper events | Yes (CID 341, 383) | Possibly (if CID is sent) |
 | Keypad LCD text (real-time) | Yes (32 chars, updated live) | No |
 | Zone timer history | Yes (seconds since each zone last closed) | No |
 
@@ -47,17 +47,16 @@ The TPI provides several distinct event types:
 ## When to Use Which
 
 **Use Syslog if you:**
-- Just want a log of "which door opened when"
+- Want a log of door opens/closes, arm/disarm, alarms, and CID events
 - Already have a TPI client connected (Homebridge, Home Assistant, etc.)
 - Want zero risk to your existing setup
 - Don't need to send commands to the panel
+- Want to know which user armed/disarmed (via CID events)
 
 **Use TPI if you need to:**
-- Know which user armed/disarmed the system
-- Monitor specific sensor battery levels
-- Track RF supervision loss or tamper events
 - Send commands (arm, disarm, bypass zones)
 - See real-time keypad display text
 - Get zone timer history dumps
+- Guaranteed access to all CID codes (syslog sends most, but some may vary by firmware)
 
 **You can use both simultaneously.** Syslog operates on a completely independent channel and won't affect TPI connections.

@@ -1,4 +1,4 @@
-const { parseSyslogMessage, getZoneName } = require('./parser');
+const { parseSyslogMessage, getZoneName, parseCID } = require('./parser');
 
 // Sample zones config for testing
 const testZones = {
@@ -230,5 +230,107 @@ describe('parseSyslogMessage - edge cases', () => {
     const after = new Date();
     expect(result.timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
     expect(result.timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
+  });
+});
+
+// ---- parseCID ----
+
+describe('parseCID', () => {
+  test('parses Armed Stay (qualifier 3, code 441)', () => {
+    const cid = parseCID('3441010020');
+    expect(cid.event).toBe('Armed Stay');
+    expect(cid.qualifier).toBe('3');
+    expect(cid.eventCode).toBe('441');
+    expect(cid.partition).toBe(1);
+    expect(cid.zoneOrUser).toBe(2);
+  });
+
+  test('parses Disarmed from Stay (qualifier 1, code 441)', () => {
+    const cid = parseCID('1441010020');
+    expect(cid.event).toBe('Disarmed');
+    expect(cid.partition).toBe(1);
+    expect(cid.zoneOrUser).toBe(2);
+  });
+
+  test('parses Armed Away (qualifier 3, code 442)', () => {
+    const cid = parseCID('3442010010');
+    expect(cid.event).toBe('Armed Away');
+  });
+
+  test('parses Armed Night (qualifier 3, code 443)', () => {
+    const cid = parseCID('3443010010');
+    expect(cid.event).toBe('Armed Night');
+  });
+
+  test('parses fire alarm (code 110)', () => {
+    const cid = parseCID('1110010050');
+    expect(cid.event).toBe('Alarm');
+    expect(cid.description).toBe('Fire Alarm');
+  });
+
+  test('parses burglary alarm (code 130)', () => {
+    const cid = parseCID('1130010030');
+    expect(cid.event).toBe('Alarm');
+    expect(cid.description).toBe('Burglary Alarm');
+  });
+
+  test('parses AC power loss (code 301)', () => {
+    const cid = parseCID('1301010000');
+    expect(cid.event).toBe('AC Power Loss');
+    expect(cid.description).toBe('AC Power Loss');
+  });
+
+  test('returns null for short strings', () => {
+    expect(parseCID('1234')).toBeNull();
+    expect(parseCID('')).toBeNull();
+    expect(parseCID(null)).toBeNull();
+  });
+
+  test('handles unknown event codes', () => {
+    const cid = parseCID('1999010010');
+    expect(cid.event).toBe('CID 999');
+    expect(cid.description).toBe('Unknown (999)');
+  });
+});
+
+// ---- parseSyslogMessage: CID events ----
+
+describe('parseSyslogMessage - CID events', () => {
+  test('parses CID Armed Stay from real EVL4 message', () => {
+    const raw = '<166>ENVISALINK[001C2A02BB1F]:  CID Event: 3441010020';
+    const result = parseSyslogMessage(raw, testZones);
+    expect(result.event).toBe('Armed Stay');
+    expect(result.user).toBe(2);
+    expect(result.partition).toBe(1);
+    expect(result.message).toContain('Armed Stay/Disarmed');
+    expect(result.message).toContain('user 2');
+  });
+
+  test('parses CID Disarmed from real EVL4 message', () => {
+    const raw = '<166>ENVISALINK[001C2A02BB1F]:  CID Event: 1441010020';
+    const result = parseSyslogMessage(raw, testZones);
+    expect(result.event).toBe('Disarmed');
+    expect(result.user).toBe(2);
+    expect(result.partition).toBe(1);
+  });
+
+  test('parses CID Armed Away', () => {
+    const raw = '<166>ENVISALINK[001C2A02BB1F]:  CID Event: 3442010010';
+    const result = parseSyslogMessage(raw, testZones);
+    expect(result.event).toBe('Armed Away');
+    expect(result.user).toBe(1);
+  });
+
+  test('parses CID alarm event', () => {
+    const raw = '<166>ENVISALINK[001C2A02BB1F]:  CID Event: 1130010030';
+    const result = parseSyslogMessage(raw, testZones);
+    expect(result.event).toBe('Alarm');
+    expect(result.message).toContain('Burglary Alarm');
+  });
+
+  test('parses CID with unknown code as Other', () => {
+    const raw = '<166>ENVISALINK[001C2A02BB1F]:  CID Event: 1999010010';
+    const result = parseSyslogMessage(raw, testZones);
+    expect(result.event).toBe('CID 999');
   });
 });
