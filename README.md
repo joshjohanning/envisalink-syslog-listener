@@ -62,9 +62,12 @@ sudo node envisalink-syslog-listener.js --debug --dryRun
 | `--MAILGUN_DOMAIN` | env var | Mailgun domain |
 | `--emailOnOpen` | `false` | Send email when any zone opens |
 | `--emailOnAlarm` | `true` | Send email on alarm events |
+| `--emailFrom` | env var | From address for email alerts (e.g., `"EnvisaLink <alerts@example.com>"`) |
+| `--emailTo` | env var | Comma-separated list of email recipients |
 | `--GOOGLE_SHEETS_WEBHOOK` | env var | Google Apps Script web app URL for logging to Sheets |
 | `--NTFY_TOPIC` | env var | [ntfy.sh](https://ntfy.sh) topic for push notifications |
 | `--rulesPath` | `./rules.json` | Path to alert rules config |
+| `--heartbeatMinutes` | `0` | Alert if no syslog activity for N minutes (0 = disabled) |
 
 > **Note:** Port 514 requires root/`sudo`. Alternatively, use a higher port and redirect with iptables:
 >
@@ -127,14 +130,25 @@ The `action` field controls how you're notified:
 | `ntfy` | Send a push notification via [ntfy.sh](https://ntfy.sh) |
 | `both` | Send both email and push notification |
 
+Optional repeat fields:
+
+| Field | Default | Description |
+|---|---|---|
+| `repeatInterval` | -- | Minutes between repeat alerts while the zone stays open |
+| `maxRepeats` | `0` (unlimited) | Maximum number of repeat alerts (0 = no limit) |
+
+Repeat alerts include "still open" in the message and show the total time the zone has been open.
+
 ```json
 [
   {
-    "description": "Push notification if garage doors are left open 20+ minutes",
+    "description": "Push notification if garage doors are left open 20+ minutes, repeat every 30 min",
     "zone": "3",
     "condition": "open_duration",
     "minutes": 20,
-    "action": "ntfy"
+    "action": "ntfy",
+    "repeatInterval": 30,
+    "maxRepeats": 3
   },
   {
     "description": "Email if back door is left open 10+ minutes",
@@ -147,6 +161,23 @@ The `action` field controls how you're notified:
 ```
 
 Requires Mailgun for `email`/`both` actions, and `--NTFY_TOPIC` for `ntfy`/`both` actions.
+
+## Heartbeat Monitoring
+
+Optionally alert if the listener hasn't received any syslog messages for a configurable period. This helps detect when the EVL4 goes offline, loses network connectivity, or the syslog client gets misconfigured.
+
+```sh
+# Alert if no activity for 24 hours (1440 minutes)
+sudo node envisalink-syslog-listener.js --heartbeatMinutes=1440
+```
+
+Or set it as an environment variable in the systemd service file:
+
+```ini
+Environment=HEARTBEAT_MINUTES=1440
+```
+
+Heartbeat alerts are sent via all configured channels (email if Mailgun + `emailFrom`/`emailTo` are set, ntfy if `NTFY_TOPIC` is set). The alert fires once per inactivity period and resets when a new message arrives.
 
 ## Push Notifications (ntfy.sh)
 

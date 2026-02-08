@@ -1,10 +1,12 @@
 [
   {
-    "description": "Alert if the garage doors are left open for more than 20 minutes",
+    "description": "Alert if the garage doors are left open for more than 20 minutes, repeat every 30 minutes",
     "zone": "3",
     "condition": "open_duration",
     "minutes": 20,
-    "action": "ntfy"
+    "action": "ntfy",
+    "repeatInterval": 30,
+    "maxRepeats": 3
   },
   {
     "description": "Alert if the back door is left open for more than 10 minutes",

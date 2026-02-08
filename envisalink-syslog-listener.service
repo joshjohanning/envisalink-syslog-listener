@@ -15,12 +15,17 @@ RestartSec=10
 # Optional: Mailgun email alerts (uncomment and fill in)
 # Environment=MAILGUN_API_KEY=your_key
 # Environment=MAILGUN_DOMAIN=your_domain
+# Environment=EMAIL_FROM=EnvisaLink Syslog <alerts@example.com>
+# Environment=EMAIL_TO=user@example.com
 
 # Optional: Google Sheets logging (uncomment and fill in)
 # Environment=GOOGLE_SHEETS_WEBHOOK=https://script.google.com/macros/s/your_script_id/exec
 
 # Optional: ntfy.sh push notifications (uncomment and fill in)
 # Environment=NTFY_TOPIC=my-envisalink-alerts
+
+# Optional: heartbeat monitoring -- alert if no activity (in minutes, 0 = disabled)
+# Environment=HEARTBEAT_MINUTES=1440
 
 # Logging - stdout/stderr go to journalctl
 StandardOutput=journal

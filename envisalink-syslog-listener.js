@@ -23,7 +23,12 @@
 //     --MAILGUN_DOMAIN    Mailgun domain (or set env var)
 //     --emailOnOpen       Send email when a zone opens (default: false)
 //     --emailOnAlarm      Send email on alarm events (default: true)
+//     --emailFrom         From address for email alerts (or set env var EMAIL_FROM)
+//     --emailTo           Comma-separated recipient list (or set env var EMAIL_TO)
 //     --GOOGLE_SHEETS_WEBHOOK  Google Apps Script URL for logging to Sheets
+//     --NTFY_TOPIC        ntfy.sh topic for push notifications
+//     --rulesPath         Path to alert rules config (default: ./rules.json)
+//     --heartbeatMinutes  Alert if no syslog activity for N minutes (0 = disabled)
 //
 // Note: Port 514 requires root/sudo. Alternatively, use a higher port and
 //       redirect with iptables:
@@ -52,7 +57,10 @@ const argv = yargs(hideBin(process.argv))
   .option('emailOnAlarm', { type: 'boolean', default: true, describe: 'Send email on alarm events' })
   .option('GOOGLE_SHEETS_WEBHOOK', { type: 'string', default: '', describe: 'Google Apps Script web app URL for logging to Google Sheets' })
   .option('NTFY_TOPIC', { type: 'string', default: '', describe: 'ntfy.sh topic for push notifications (e.g., my-envisalink-alerts)' })
+  .option('emailFrom', { type: 'string', default: '', describe: 'From address for email alerts (e.g., "EnvisaLink <alerts@example.com>")' })
+  .option('emailTo', { type: 'string', default: '', describe: 'Comma-separated list of email recipients' })
   .option('rulesPath', { type: 'string', default: path.join(__dirname, 'rules.json'), describe: 'Path to alert rules config' })
+  .option('heartbeatMinutes', { type: 'number', default: 0, describe: 'Alert if no syslog activity for this many minutes (0 = disabled)' })
   .argv;
 
 // Resolve config
@@ -67,7 +75,10 @@ const EMAIL_ON_OPEN = argv.emailOnOpen;
 const EMAIL_ON_ALARM = argv.emailOnAlarm;
 const GOOGLE_SHEETS_WEBHOOK = argv.GOOGLE_SHEETS_WEBHOOK || process.env.GOOGLE_SHEETS_WEBHOOK || '';
 const NTFY_TOPIC = argv.NTFY_TOPIC || process.env.NTFY_TOPIC || '';
+const EMAIL_FROM = argv.emailFrom || process.env.EMAIL_FROM || '';
+const EMAIL_TO = (argv.emailTo || process.env.EMAIL_TO || '').split(',').map(s => s.trim()).filter(Boolean);
 const RULES_PATH = argv.rulesPath;
+const HEARTBEAT_MINUTES = argv.heartbeatMinutes || parseInt(process.env.HEARTBEAT_MINUTES, 10) || 0;
 
 // Optional mailgun setup -- only require if we need it
 let mg = null;
@@ -106,8 +117,9 @@ if (fs.existsSync(RULES_PATH)) {
 }
 
 // Zone state tracking for duration-based rules
-const zoneOpenTimers = {};  // "zone:ruleIndex" -> setTimeout ID
-const zoneOpenTimes = {};   // zone -> Date when opened
+const zoneOpenTimers = {};    // "zone:ruleIndex" -> setTimeout ID
+const zoneOpenTimes = {};     // zone -> Date when opened
+const zoneRepeatCounts = {};  // "zone:ruleIndex" -> number of repeat alerts sent
 
 // ---- Helpers ----
 
@@ -142,15 +154,23 @@ function parseMessage(raw) {
 // ---- Email ----
 
 async function sendAlert(subject, text) {
-  if (DRY_RUN || !mg) {
+  if (DRY_RUN) {
     logToFile(`[DRY RUN] Would send email: ${subject}`);
+    return;
+  }
+  if (!mg) {
+    if (DEBUG) logToFile(`Mailgun not configured, skipping email: ${subject}`);
+    return;
+  }
+  if (!EMAIL_FROM || EMAIL_TO.length === 0) {
+    logToFile(`Email skipped (no --emailFrom/--emailTo configured): ${subject}`);
     return;
   }
 
   try {
     const result = await mg.messages.create(MAILGUN_DOMAIN, {
-      from: 'EnvisaLink Syslog <soccerjoshj07+no_reply@gmail.com>',
-      to: ['soccerjoshj07@gmail.com'],
+      from: EMAIL_FROM,
+      to: EMAIL_TO,
       subject: subject,
       text: text
     });
@@ -244,6 +264,49 @@ async function sendNtfy(title, message, priority) {
 
 // ---- Alert rules engine ----
 
+function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
+  const timerKey = `${zoneKey}:${ruleIndex}`;
+  const zoneName = getZoneNameLocal(zoneKey);
+
+  zoneOpenTimers[timerKey] = setTimeout(async () => {
+    const openedAt = zoneOpenTimes[zoneKey];
+    const totalMs = Date.now() - openedAt.getTime();
+    const totalMinutes = Math.round(totalMs / (60 * 1000));
+    const isRepeat = repeatCount > 0;
+    const label = isRepeat ? 'still open' : 'has been open';
+
+    logToFile(`Alert rule triggered: ${zoneName} ${label} for ${totalMinutes}+ minutes${isRepeat ? ` (repeat ${repeatCount})` : ''}`);
+
+    if (rule.action === 'email' || rule.action === 'both') {
+      await sendAlert(
+        `⚠️ ${zoneName} ${isRepeat ? 'still ' : ''}open for ${totalMinutes}+ minutes`,
+        `${zoneName} ${label} since ${formatLocalTime(openedAt)}.\n\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}\nDuration: ${totalMinutes}+ minutes${isRepeat ? `\nRepeat: ${repeatCount}` : ''}`
+      );
+    }
+    if (rule.action === 'ntfy' || rule.action === 'both') {
+      await sendNtfy(
+        `${zoneName} ${isRepeat ? 'still ' : ''}open ${totalMinutes}+ min`,
+        `${isRepeat ? 'Still open' : 'Open'} since ${formatLocalTime(openedAt)}`,
+        'high'
+      );
+    }
+
+    // Schedule repeat alert if configured
+    const repeatIntervalMs = (rule.repeatInterval || 0) * 60 * 1000;
+    const nextRepeat = repeatCount + 1;
+    const maxRepeats = rule.maxRepeats || 0;  // 0 = unlimited
+
+    if (repeatIntervalMs > 0 && (maxRepeats === 0 || nextRepeat <= maxRepeats)) {
+      zoneRepeatCounts[timerKey] = nextRepeat;
+      startRuleTimer(zoneKey, rule, ruleIndex, repeatIntervalMs, nextRepeat);
+      if (DEBUG) logToFile(`Repeat timer set: ${zoneName} (rule ${ruleIndex}) will alert again in ${rule.repeatInterval} min`);
+    } else {
+      delete zoneOpenTimers[timerKey];
+      delete zoneRepeatCounts[timerKey];
+    }
+  }, delayMs);
+}
+
 function evaluateRules(parsed) {
   if (rules.length === 0 || parsed.zone === null) return;
 
@@ -260,35 +323,16 @@ function evaluateRules(parsed) {
       const ruleIndex = rules.indexOf(rule);
       const timerKey = `${zoneKey}:${ruleIndex}`;
       const delayMs = (rule.minutes || 20) * 60 * 1000;
-      const zoneName = getZoneNameLocal(zoneKey);
 
-      // Clear any existing timer for this specific rule
+      // Clear any existing timer and repeat count for this specific rule
       if (zoneOpenTimers[timerKey]) {
         clearTimeout(zoneOpenTimers[timerKey]);
       }
+      delete zoneRepeatCounts[timerKey];
 
-      zoneOpenTimers[timerKey] = setTimeout(async () => {
-        const openedAt = zoneOpenTimes[zoneKey];
-        logToFile(`Alert rule triggered: ${zoneName} has been open for ${rule.minutes} minutes`);
+      startRuleTimer(zoneKey, rule, ruleIndex, delayMs, 0);
 
-        if (rule.action === 'email' || rule.action === 'both') {
-          await sendAlert(
-            `⚠️ ${zoneName} open for ${rule.minutes}+ minutes`,
-            `${zoneName} has been open since ${formatLocalTime(openedAt)}.\n\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}\nDuration: ${rule.minutes} minutes`
-          );
-        }
-        if (rule.action === 'ntfy' || rule.action === 'both') {
-          await sendNtfy(
-            `${zoneName} open ${rule.minutes}+ min`,
-            `Open since ${formatLocalTime(openedAt)}`,
-            'high'
-          );
-        }
-
-        delete zoneOpenTimers[timerKey];
-      }, delayMs);
-
-      if (DEBUG) logToFile(`Timer set: ${zoneName} (rule ${ruleIndex}) will alert in ${rule.minutes} min if not closed`);
+      if (DEBUG) logToFile(`Timer set: ${getZoneNameLocal(zoneKey)} (rule ${ruleIndex}) will alert in ${rule.minutes} min if not closed`);
     }
   }
 
@@ -298,11 +342,47 @@ function evaluateRules(parsed) {
       if (key.startsWith(`${zoneKey}:`)) {
         clearTimeout(zoneOpenTimers[key]);
         delete zoneOpenTimers[key];
+        delete zoneRepeatCounts[key];
       }
     }
     delete zoneOpenTimes[zoneKey];
     if (DEBUG) logToFile(`Timer(s) cleared: zone ${zoneKey} closed before alert`);
   }
+}
+
+// ---- Heartbeat monitoring ----
+
+let lastMessageTime = Date.now();
+let heartbeatAlertSent = false;
+
+function startHeartbeat() {
+  if (HEARTBEAT_MINUTES <= 0) return;
+
+  const checkIntervalMs = 60 * 1000;  // Check every minute
+  const thresholdMs = HEARTBEAT_MINUTES * 60 * 1000;
+
+  setInterval(async () => {
+    const elapsed = Date.now() - lastMessageTime;
+    if (elapsed >= thresholdMs && !heartbeatAlertSent) {
+      const hours = Math.round(elapsed / (60 * 60 * 1000) * 10) / 10;
+      logToFile(`Heartbeat alert: no syslog activity for ${hours} hours`);
+
+      await sendAlert(
+        '\uD83D\uDC93 EnvisaLink heartbeat -- no activity',
+        `No syslog messages received for ${hours} hours (threshold: ${HEARTBEAT_MINUTES} minutes).\n\nThis could indicate:\n- The EVL4 is offline or unreachable\n- The syslog client is misconfigured\n- Network issues between the EVL4 and this server\n\nLast message received: ${formatLocalTime(new Date(lastMessageTime))}`
+      );
+
+      await sendNtfy(
+        `No EVL4 activity for ${hours}h`,
+        `No syslog messages since ${formatLocalTime(new Date(lastMessageTime))}`,
+        'high'
+      );
+
+      heartbeatAlertSent = true;
+    }
+  }, checkIntervalMs);
+
+  logToFile(`Heartbeat monitoring enabled: alert after ${HEARTBEAT_MINUTES} minutes of inactivity`);
 }
 
 // ---- Main UDP server ----
@@ -327,6 +407,10 @@ server.on('message', async (msg, rinfo) => {
   }
 
   const parsed = parseMessage(raw);
+
+  // Reset heartbeat tracker
+  lastMessageTime = Date.now();
+  heartbeatAlertSent = false;
 
   // Build a friendly log line
   let logLine;
@@ -367,11 +451,15 @@ server.on('listening', () => {
   console.log(`Logging to: ${LOG_PATH}`);
   console.log(`Zones config: ${ZONES_PATH} (${Object.keys(zones).length} zone(s) loaded)`);
   if (mg) {
-    console.log('Mailgun: configured');
+    if (EMAIL_FROM && EMAIL_TO.length > 0) {
+      console.log(`Mailgun: configured (from: ${EMAIL_FROM}, to: ${EMAIL_TO.join(', ')})`);
+    } else {
+      console.log('Mailgun: API key set but no --emailFrom/--emailTo configured -- email alerts disabled');
+    }
   } else if (DRY_RUN) {
     console.log('Mailgun: dry-run mode (emails will be skipped)');
   } else {
-    console.log('Mailgun: not configured (no API key/domain - email alerts disabled)');
+    console.log('Mailgun: not configured (no API key/domain -- email alerts disabled)');
   }
   if (GOOGLE_SHEETS_WEBHOOK) {
     console.log('Google Sheets: configured');
@@ -388,6 +476,11 @@ server.on('listening', () => {
   } else {
     console.log('Alert rules: none loaded');
   }
+  if (HEARTBEAT_MINUTES > 0) {
+    console.log(`Heartbeat: alert after ${HEARTBEAT_MINUTES} minutes of inactivity`);
+  }
+
+  startHeartbeat();
 });
 
 server.bind(PORT);

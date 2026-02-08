@@ -1,6 +1,6 @@
 {
   "name": "envisalink-syslog-listener",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Syslog listener for the EyezOn EnvisaLink 4 (EVL4) module. Logs zone events (door open/close, arm/disarm, alarms, CID events) over UDP with optional email alerts (Mailgun), push notifications (ntfy.sh), Google Sheets logging, and configurable alert rules.",
   "main": "envisalink-syslog-listener.js",
   "scripts": {
