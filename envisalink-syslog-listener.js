@@ -29,6 +29,7 @@
 //     --NTFY_TOPIC        ntfy.sh topic for push notifications
 //     --rulesPath         Path to alert rules config (default: ./rules.json)
 //     --heartbeatMinutes  Alert if no syslog activity for N minutes (0 = disabled)
+//     --heartbeatChannel  Heartbeat alert channel: all, email, ntfy (default: all)
 //
 // Note: Port 514 requires root/sudo. Alternatively, use a higher port and
 //       redirect with iptables:
@@ -61,6 +62,7 @@ const argv = yargs(hideBin(process.argv))
   .option('emailTo', { type: 'string', default: '', describe: 'Comma-separated list of email recipients' })
   .option('rulesPath', { type: 'string', default: path.join(__dirname, 'rules.json'), describe: 'Path to alert rules config' })
   .option('heartbeatMinutes', { type: 'number', default: 0, describe: 'Alert if no syslog activity for this many minutes (0 = disabled)' })
+  .option('heartbeatChannel', { type: 'string', default: 'all', describe: 'Heartbeat alert channel: all, email, ntfy (default: all)' })
   .argv;
 
 // Resolve config
@@ -79,6 +81,7 @@ const EMAIL_FROM = argv.emailFrom || process.env.EMAIL_FROM || '';
 const EMAIL_TO = (argv.emailTo || process.env.EMAIL_TO || '').split(',').map(s => s.trim()).filter(Boolean);
 const RULES_PATH = argv.rulesPath;
 const HEARTBEAT_MINUTES = argv.heartbeatMinutes || parseInt(process.env.HEARTBEAT_MINUTES, 10) || 0;
+const HEARTBEAT_CHANNEL = (argv.heartbeatChannel || process.env.HEARTBEAT_CHANNEL || 'all').toLowerCase();
 
 // Optional mailgun setup -- only require if we need it
 let mg = null;
@@ -367,16 +370,20 @@ function startHeartbeat() {
       const hours = Math.round(elapsed / (60 * 60 * 1000) * 10) / 10;
       logToFile(`Heartbeat alert: no syslog activity for ${hours} hours`);
 
-      await sendAlert(
-        '\uD83D\uDC93 EnvisaLink heartbeat -- no activity',
-        `No syslog messages received for ${hours} hours (threshold: ${HEARTBEAT_MINUTES} minutes).\n\nThis could indicate:\n- The EVL4 is offline or unreachable\n- The syslog client is misconfigured\n- Network issues between the EVL4 and this server\n\nLast message received: ${formatLocalTime(new Date(lastMessageTime))}`
-      );
+      if (HEARTBEAT_CHANNEL === 'all' || HEARTBEAT_CHANNEL === 'email') {
+        await sendAlert(
+          '\uD83D\uDC93 EnvisaLink heartbeat -- no activity',
+          `No syslog messages received for ${hours} hours (threshold: ${HEARTBEAT_MINUTES} minutes).\n\nThis could indicate:\n- The EVL4 is offline or unreachable\n- The syslog client is misconfigured\n- Network issues between the EVL4 and this server\n\nLast message received: ${formatLocalTime(new Date(lastMessageTime))}`
+        );
+      }
 
-      await sendNtfy(
-        `No EVL4 activity for ${hours}h`,
-        `No syslog messages since ${formatLocalTime(new Date(lastMessageTime))}`,
-        'high'
-      );
+      if (HEARTBEAT_CHANNEL === 'all' || HEARTBEAT_CHANNEL === 'ntfy') {
+        await sendNtfy(
+          `No EVL4 activity for ${hours}h`,
+          `No syslog messages since ${formatLocalTime(new Date(lastMessageTime))}`,
+          'high'
+        );
+      }
 
       heartbeatAlertSent = true;
     }
@@ -477,7 +484,7 @@ server.on('listening', () => {
     console.log('Alert rules: none loaded');
   }
   if (HEARTBEAT_MINUTES > 0) {
-    console.log(`Heartbeat: alert after ${HEARTBEAT_MINUTES} minutes of inactivity`);
+    console.log(`Heartbeat: alert after ${HEARTBEAT_MINUTES} minutes of inactivity (channel: ${HEARTBEAT_CHANNEL})`);
   }
 
   startHeartbeat();

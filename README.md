@@ -68,6 +68,7 @@ sudo node envisalink-syslog-listener.js --debug --dryRun
 | `--NTFY_TOPIC` | env var | [ntfy.sh](https://ntfy.sh) topic for push notifications |
 | `--rulesPath` | `./rules.json` | Path to alert rules config |
 | `--heartbeatMinutes` | `0` | Alert if no syslog activity for N minutes (0 = disabled) |
+| `--heartbeatChannel` | `all` | Heartbeat alert channel: `all`, `email`, or `ntfy` |
 
 > **Note:** Port 514 requires root/`sudo`. Alternatively, use a higher port and redirect with iptables:
 >
@@ -175,9 +176,10 @@ Or set it as an environment variable in the systemd service file:
 
 ```ini
 Environment=HEARTBEAT_MINUTES=1440
+Environment=HEARTBEAT_CHANNEL=ntfy
 ```
 
-Heartbeat alerts are sent via all configured channels (email if Mailgun + `emailFrom`/`emailTo` are set, ntfy if `NTFY_TOPIC` is set). The alert fires once per inactivity period and resets when a new message arrives.
+Heartbeat alerts are sent via the configured channel. Use `all` (default) to send via both email and ntfy, or `email`/`ntfy` to use only one. The alert fires once per inactivity period and resets when a new message arrives.
 
 ## Push Notifications (ntfy.sh)
 
