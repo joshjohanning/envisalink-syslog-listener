@@ -112,8 +112,10 @@ let rules = [];
 if (fs.existsSync(RULES_PATH)) {
   try {
     const raw = fs.readFileSync(RULES_PATH, 'utf8');
-    rules = JSON.parse(raw);
-    logToFile(`Loaded ${rules.length} alert rule(s) from ${RULES_PATH}`);
+    const allRules = JSON.parse(raw);
+    rules = allRules.filter(r => r.enabled !== false);
+    const skipped = allRules.length - rules.length;
+    logToFile(`Loaded ${rules.length} alert rule(s) from ${RULES_PATH}${skipped > 0 ? ` (${skipped} disabled)` : ''}`);
   } catch (err) {
     logToFile(`Warning: Could not load rules file (${RULES_PATH}): ${err.message}`);
   }

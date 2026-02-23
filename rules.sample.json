@@ -1,6 +1,7 @@
 [
   {
     "description": "Alert if the garage doors are left open for more than 20 minutes, repeat every 30 minutes",
+    "enabled": true,
     "zone": "3",
     "condition": "open_duration",
     "minutes": 20,
@@ -10,6 +11,7 @@
   },
   {
     "description": "Alert if the back door is left open for more than 10 minutes",
+    "enabled": true,
     "zone": "2",
     "condition": "open_duration",
     "minutes": 10,

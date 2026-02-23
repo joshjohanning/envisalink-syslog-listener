@@ -131,10 +131,11 @@ The `action` field controls how you're notified:
 | `ntfy` | Send a push notification via [ntfy.sh](https://ntfy.sh) |
 | `both` | Send both email and push notification |
 
-Optional repeat fields:
+Optional fields:
 
 | Field | Default | Description |
 |---|---|---|
+| `enabled` | `true` | Set to `false` to disable a rule without removing it |
 | `repeatInterval` | -- | Minutes between repeat alerts while the zone stays open |
 | `maxRepeats` | `0` (unlimited) | Maximum number of repeat alerts (0 = no limit) |
 
@@ -144,6 +145,7 @@ Repeat alerts include "still open" in the message and show the total time the zo
 [
   {
     "description": "Push notification if garage doors are left open 20+ minutes, repeat every 30 min",
+    "enabled": true,
     "zone": "3",
     "condition": "open_duration",
     "minutes": 20,
@@ -153,6 +155,7 @@ Repeat alerts include "still open" in the message and show the total time the zo
   },
   {
     "description": "Email if back door is left open 10+ minutes",
+    "enabled": false,
     "zone": "2",
     "condition": "open_duration",
     "minutes": 10,
