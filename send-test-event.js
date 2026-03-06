@@ -29,7 +29,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (!message) {
-  message = 'Zone Open: 99';
+  message = 'Zone Open: 200';
 }
 
 // Wrap in EVL4 syslog format

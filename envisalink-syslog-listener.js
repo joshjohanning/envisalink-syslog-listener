@@ -56,6 +56,7 @@ const argv = yargs(hideBin(process.argv))
   .option('MAILGUN_DOMAIN', { type: 'string', default: '', describe: 'Mailgun domain' })
   .option('emailOnOpen', { type: 'boolean', default: false, describe: 'Send email when a zone opens' })
   .option('emailOnAlarm', { type: 'boolean', default: true, describe: 'Send email on alarm events' })
+  .option('ntfyOnAlarm', { type: 'boolean', default: true, describe: 'Send ntfy push notification on alarm events' })
   .option('GOOGLE_SHEETS_WEBHOOK', { type: 'string', default: '', describe: 'Google Apps Script web app URL for logging to Google Sheets' })
   .option('NTFY_TOPIC', { type: 'string', default: '', describe: 'ntfy.sh topic for push notifications (e.g., my-envisalink-alerts)' })
   .option('emailFrom', { type: 'string', default: '', describe: 'From address for email alerts (e.g., "EnvisaLink <alerts@example.com>")' })
@@ -75,6 +76,7 @@ const MAILGUN_API_KEY = argv.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '
 const MAILGUN_DOMAIN = argv.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
 const EMAIL_ON_OPEN = argv.emailOnOpen;
 const EMAIL_ON_ALARM = argv.emailOnAlarm;
+const NTFY_ON_ALARM = argv.ntfyOnAlarm;
 const GOOGLE_SHEETS_WEBHOOK = argv.GOOGLE_SHEETS_WEBHOOK || process.env.GOOGLE_SHEETS_WEBHOOK || '';
 const NTFY_TOPIC = argv.NTFY_TOPIC || process.env.NTFY_TOPIC || '';
 const EMAIL_FROM = argv.emailFrom || process.env.EMAIL_FROM || '';
@@ -438,11 +440,20 @@ server.on('message', async (msg, rinfo) => {
   evaluateRules(parsed);
 
   // Send email alerts based on configuration
-  if (EMAIL_ON_ALARM && parsed.event === 'Alarm') {
-    await sendAlert(
-      `🚨 EnvisaLink Alarm: ${parsed.zoneName || 'System'}`,
-      `An alarm event was detected.\n\nDetails:\n- Event: ${parsed.event}\n- Zone: ${parsed.zoneName || 'N/A'}\n- Raw message: ${parsed.message}\n- Time: ${formatLocalTime(parsed.timestamp)}`
-    );
+  if (parsed.event === 'Alarm') {
+    if (EMAIL_ON_ALARM) {
+      await sendAlert(
+        `🚨 EnvisaLink Alarm: ${parsed.zoneName || 'System'}`,
+        `An alarm event was detected.\n\nDetails:\n- Event: ${parsed.event}\n- Zone: ${parsed.zoneName || 'N/A'}\n- Raw message: ${parsed.message}\n- Time: ${formatLocalTime(parsed.timestamp)}`
+      );
+    }
+    if (NTFY_ON_ALARM) {
+      await sendNtfy(
+        `🚨 Alarm: ${parsed.zoneName || 'System'}`,
+        `Event: ${parsed.event}\nZone: ${parsed.zoneName || 'N/A'}\nMessage: ${parsed.message}\nTime: ${formatLocalTime(parsed.timestamp)}`,
+        'urgent'
+      );
+    }
   }
 
   if (EMAIL_ON_OPEN && parsed.event === 'Zone Open') {

@@ -22,7 +22,7 @@ describe('getZoneName', () => {
   });
 
   test('returns generic name for an unknown zone', () => {
-    expect(getZoneName(testZones, 99)).toBe('Zone 99');
+    expect(getZoneName(testZones, 200)).toBe('Zone 200');
   });
 
   test('returns generic name when zones dictionary is empty', () => {
@@ -332,5 +332,97 @@ describe('parseSyslogMessage - CID events', () => {
     const raw = '<166>ENVISALINK[001C2A02BB1F]:  CID Event: 1999010010';
     const result = parseSyslogMessage(raw, testZones);
     expect(result.event).toBe('CID 999');
+  });
+});
+
+// ---- parseCID: alarm restore ----
+
+describe('parseCID - alarm restore', () => {
+  test('qualifier 3 with alarm code returns Alarm Restore', () => {
+    const cid = parseCID('3130010030');
+    expect(cid.event).toBe('Alarm Restore');
+    expect(cid.description).toBe('Burglary Alarm');
+  });
+
+  test('qualifier 1 with alarm code returns Alarm', () => {
+    const cid = parseCID('1130010030');
+    expect(cid.event).toBe('Alarm');
+  });
+
+  test('qualifier 3 audible panic restore returns Alarm Restore', () => {
+    const cid = parseCID('3123010990');
+    expect(cid.event).toBe('Alarm Restore');
+    expect(cid.description).toBe('Audible Panic');
+    expect(cid.zoneOrUser).toBe(99);
+  });
+
+  test('qualifier 3 fire alarm restore returns Alarm Restore', () => {
+    const cid = parseCID('3110010000');
+    expect(cid.event).toBe('Alarm Restore');
+    expect(cid.description).toBe('Fire Alarm');
+  });
+});
+
+// ---- parseCID: panic codes ----
+
+describe('parseCID - panic codes', () => {
+  test('parses audible panic (code 123)', () => {
+    const cid = parseCID('1123010990');
+    expect(cid.event).toBe('Alarm');
+    expect(cid.description).toBe('Audible Panic');
+    expect(cid.zoneOrUser).toBe(99);
+  });
+
+  test('parses silent panic (code 122)', () => {
+    const cid = parseCID('1122010990');
+    expect(cid.event).toBe('Alarm');
+    expect(cid.description).toBe('Silent Panic');
+  });
+
+  test('parses panic alarm (code 120)', () => {
+    const cid = parseCID('1120010990');
+    expect(cid.event).toBe('Alarm');
+    expect(cid.description).toBe('Panic Alarm');
+  });
+});
+
+// ---- parseSyslogMessage: CID alarm restore ----
+
+describe('parseSyslogMessage - CID alarm restore', () => {
+  test('CID alarm restore is not classified as Alarm', () => {
+    const raw = '<166>ENVISALINK[001C2A02BB1F]:  CID Event: 3123010990';
+    const result = parseSyslogMessage(raw, testZones);
+    expect(result.event).toBe('Alarm Restore');
+    expect(result.message).toContain('Audible Panic');
+  });
+
+  test('CID new alarm is still classified as Alarm', () => {
+    const raw = '<166>ENVISALINK[001C2A02BB1F]:  CID Event: 1123010990';
+    const result = parseSyslogMessage(raw, testZones);
+    expect(result.event).toBe('Alarm');
+    expect(result.message).toContain('Audible Panic');
+  });
+});
+
+// ---- parseSyslogMessage: zone 99 keypad panic ----
+
+describe('parseSyslogMessage - keypad panic zone 99', () => {
+  test('Alarm Zone 099 is parsed as alarm event with zone', () => {
+    const raw = '<166>ENVISALINK[001C2A02BB1F]:  Alarm Zone: 099';
+    const result = parseSyslogMessage(raw, testZones);
+    expect(result.event).toBe('Alarm');
+    expect(result.zone).toBe(99);
+  });
+});
+
+// ---- getZoneName: arbitrary unknown zone ----
+
+describe('getZoneName - arbitrary zones', () => {
+  test('returns generic name for zone 200 (completely arbitrary)', () => {
+    expect(getZoneName(testZones, 200)).toBe('Zone 200');
+  });
+
+  test('returns generic name for zone 999', () => {
+    expect(getZoneName(testZones, 999)).toBe('Zone 999');
   });
 });

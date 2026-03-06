@@ -62,6 +62,7 @@ sudo node envisalink-syslog-listener.js --debug --dryRun
 | `--MAILGUN_DOMAIN` | env var | Mailgun domain |
 | `--emailOnOpen` | `false` | Send email when any zone opens |
 | `--emailOnAlarm` | `true` | Send email on alarm events |
+| `--ntfyOnAlarm` | `true` | Send ntfy push notification on alarm events |
 | `--emailFrom` | env var | From address for email alerts (e.g., `"EnvisaLink <alerts@example.com>"`) |
 | `--emailTo` | env var | Comma-separated list of email recipients |
 | `--GOOGLE_SHEETS_WEBHOOK` | env var | Google Apps Script web app URL for logging to Sheets |
@@ -316,5 +317,17 @@ Events captured include:
 - **Arm/disarm** -- via CID (Contact ID) events, including which user and partition
 - **Alarm events** -- fire, burglary, panic, medical, and more
 - **CID events** -- parsed from Ademco Contact ID protocol codes
+
+### Duplicate alarm notifications
+
+When an alarm is triggered (e.g., keypad panic), the EVL4 typically sends **multiple syslog messages** for a single event:
+
+1. A CID event (e.g., `CID Event: 1123010990` for audible panic)
+2. A plain-text message (e.g., `Alarm Zone: 099`)
+3. A CID restore when the alarm clears (e.g., `CID Event: 3123010990`)
+
+The CID restore (qualifier 3) is classified as `Alarm Restore` and does **not** trigger alarm notifications. However, messages 1 and 2 both trigger notifications since they are genuinely separate syslog messages from the EVL4. This means you may receive **2 emails and/or 2 ntfy notifications** for a single alarm event. This is by design -- alarms are rare and critical, so it's better to over-notify than risk missing one.
+
+> **Note:** DSC panels use virtual zones for keypad-initiated panic events: zone 095 (fire), 096 (aux/medical), and 099 (police/audible). These are not physical sensor zones.
 
 See [tpi-vs-syslog.md](tpi-vs-syslog.md) for a detailed comparison of syslog vs. TPI capabilities.

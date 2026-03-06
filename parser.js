@@ -20,6 +20,8 @@ const CID_EVENT_CODES = {
   '115': 'Fire Alarm (pull station)',
   '120': 'Panic Alarm',
   '121': 'Duress Alarm',
+  '122': 'Silent Panic',
+  '123': 'Audible Panic',
   '130': 'Burglary Alarm',
   '131': 'Perimeter Alarm',
   '132': 'Interior Alarm',
@@ -83,7 +85,7 @@ function parseCID(cidStr) {
       event = codeInfo || `CID ${eventCode}`;
     }
   } else if (isAlarm) {
-    event = 'Alarm';
+    event = qualifier === '3' ? 'Alarm Restore' : 'Alarm';
   } else {
     event = codeInfo || `CID ${eventCode}`;
   }
@@ -173,6 +175,15 @@ function parseSyslogMessage(raw, zones) {
     if (action.toLowerCase() === 'opene') action = 'Open';
     result.event = `Zone ${action}`;
     result.zone = parseInt(zoneMatch[2], 10);
+    result.zoneName = getZoneName(zones, result.zone);
+    return result;
+  }
+
+  // Parse "Alarm Zone: NNN" format (EVL4 sends this for keypad panic, etc.)
+  const alarmZoneMatch = content.match(/Alarm\s+Zone:\s*(\d+)/i);
+  if (alarmZoneMatch) {
+    result.event = 'Alarm';
+    result.zone = parseInt(alarmZoneMatch[1], 10);
     result.zoneName = getZoneName(zones, result.zone);
     return result;
   }
