@@ -76,7 +76,9 @@ const MAILGUN_API_KEY = argv.MAILGUN_API_KEY || process.env.MAILGUN_API_KEY || '
 const MAILGUN_DOMAIN = argv.MAILGUN_DOMAIN || process.env.MAILGUN_DOMAIN || '';
 const EMAIL_ON_OPEN = argv.emailOnOpen;
 const EMAIL_ON_ALARM = argv.emailOnAlarm;
-const NTFY_ON_ALARM = argv.ntfyOnAlarm;
+const NTFY_ON_ALARM = process.env.NTFY_ON_ALARM !== undefined
+  ? ['1', 'true', 'yes', 'on'].includes(process.env.NTFY_ON_ALARM.toLowerCase())
+  : argv.ntfyOnAlarm;
 const GOOGLE_SHEETS_WEBHOOK = argv.GOOGLE_SHEETS_WEBHOOK || process.env.GOOGLE_SHEETS_WEBHOOK || '';
 const NTFY_TOPIC = argv.NTFY_TOPIC || process.env.NTFY_TOPIC || '';
 const EMAIL_FROM = argv.emailFrom || process.env.EMAIL_FROM || '';
@@ -451,7 +453,7 @@ server.on('message', async (msg, rinfo) => {
       await sendNtfy(
         `🚨 Alarm: ${parsed.zoneName || 'System'}`,
         `Event: ${parsed.event}\nZone: ${parsed.zoneName || 'N/A'}\nMessage: ${parsed.message}\nTime: ${formatLocalTime(parsed.timestamp)}`,
-        'urgent'
+        'max'
       );
     }
   }
