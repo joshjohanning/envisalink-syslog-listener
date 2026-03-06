@@ -387,7 +387,7 @@ function startHeartbeat() {
         await sendNtfy(
           `No EVL4 activity for ${hours}h`,
           `No syslog messages since ${formatLocalTime(new Date(lastMessageTime))}`,
-          'high'
+          'default'
         );
       }
 
