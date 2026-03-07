@@ -74,7 +74,7 @@ function parseCID(cidStr) {
 
   // Determine the friendly event name
   let event;
-  const isArm = ['400', '401', '403', '407', '408', '409', '441', '442', '443'].includes(eventCode);
+  const isArm = ['400', '401', '402', '403', '404', '407', '408', '409', '441', '442', '443'].includes(eventCode);
   const isAlarm = parseInt(eventCode, 10) >= 100 && parseInt(eventCode, 10) < 200;
 
   if (isArm) {

@@ -21,7 +21,14 @@
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000); // wait up to 10s if another request is in progress
+
+  try {
+    lock.waitLock(10000); // wait up to 10s if another request is in progress
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'error', message: 'busy' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
