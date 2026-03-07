@@ -20,18 +20,25 @@
 // insertRowBefore/setValues block with: sheet.appendRow([...]);
 
 function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = JSON.parse(e.postData.contents);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000); // wait up to 10s if another request is in progress
 
-  // Insert at row 2 (below headers) so newest events appear at the top
-  sheet.insertRowBefore(2);
-  sheet.getRange(2, 1, 1, 5).setValues([[
-    data.timestamp,
-    data.event,
-    data.zone || '',
-    data.zoneName || '',
-    data.message
-  ]]);
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+
+    // Insert at row 2 (below headers) so newest events appear at the top
+    sheet.insertRowBefore(2);
+    sheet.getRange(2, 1, 1, 5).setValues([[
+      data.timestamp,
+      data.event,
+      data.zone || '',
+      data.zoneName || '',
+      data.message
+    ]]);
+  } finally {
+    lock.releaseLock();
+  }
 
   return ContentService
     .createTextOutput(JSON.stringify({ status: 'ok' }))
