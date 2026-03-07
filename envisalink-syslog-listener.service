@@ -24,6 +24,9 @@ RestartSec=10
 # Optional: ntfy.sh push notifications (uncomment and fill in)
 # Environment=NTFY_TOPIC=my-envisalink-alerts
 
+# Optional: send ntfy push notifications on alarm events (default: true when NTFY_TOPIC is set)
+# Environment=NTFY_ON_ALARM=true
+
 # Optional: heartbeat monitoring -- alert if no activity (in minutes, 0 = disabled)
 # Environment=HEARTBEAT_MINUTES=1440
 # Optional: heartbeat alert channel -- all (default), email, or ntfy
