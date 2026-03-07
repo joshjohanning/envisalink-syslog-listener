@@ -40,7 +40,11 @@ const CID_EVENT_CODES = {
   // Open/Close (arm/disarm)
   '400': 'Open/Close',
   '401': 'Open/Close by User',
+  '402': 'Open/Close (exception)',
   '403': 'Open/Close (auto)',
+  '404': 'Auto-Armed',
+  '405': 'Failed to Arm',
+  '406': 'Alarm Cancel',
   '407': 'Remote Arm/Disarm',
   '408': 'Quick Arm',
   '409': 'Keyswitch Arm/Disarm',
