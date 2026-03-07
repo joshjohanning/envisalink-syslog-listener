@@ -238,9 +238,12 @@ Environment=GOOGLE_SHEETS_WEBHOOK=https://script.google.com/macros/s/ABC.../exec
 
 ## Running as a systemd service
 
-A service file is included in the repo. Copy it and adjust the paths if needed:
+A sample service file is included in the repo. Copy it to create your local version and adjust the paths/environment variables as needed:
 
 ```sh
+# Create your local service file from the sample
+cp envisalink-syslog-listener.service.sample envisalink-syslog-listener.service
+
 # Review/edit the service file -- update paths if your repo is not at /home/pi/envisalink-syslog-listener
 # Also uncomment the MAILGUN environment lines if you want email alerts
 nano envisalink-syslog-listener.service
