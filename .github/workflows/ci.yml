@@ -24,3 +24,6 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Check npm version compatibility
+        uses: joshjohanning/npm-version-check-action@v2

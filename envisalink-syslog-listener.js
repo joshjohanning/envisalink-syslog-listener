@@ -129,6 +129,7 @@ if (fs.existsSync(RULES_PATH)) {
 const zoneOpenTimers = {};    // "zone:ruleIndex" -> setTimeout ID
 const zoneOpenTimes = {};     // zone -> Date when opened
 const zoneRepeatCounts = {};  // "zone:ruleIndex" -> number of repeat alerts sent
+const zoneAlertFired = {};    // "zone:ruleIndex" -> rule object (set when first alert fires)
 
 // ---- Helpers ----
 
@@ -278,13 +279,23 @@ function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
   const zoneName = getZoneNameLocal(zoneKey);
 
   zoneOpenTimers[timerKey] = setTimeout(async () => {
+    // Guard: zone may have closed (or re-opened) while we were waiting
     const openedAt = zoneOpenTimes[zoneKey];
+    if (!openedAt) {
+      delete zoneOpenTimers[timerKey];
+      delete zoneRepeatCounts[timerKey];
+      return;
+    }
+
     const totalMs = Date.now() - openedAt.getTime();
     const totalMinutes = Math.round(totalMs / (60 * 1000));
     const isRepeat = repeatCount > 0;
     const label = isRepeat ? 'still open' : 'has been open';
 
     logToFile(`Alert rule triggered: ${zoneName} ${label} for ${totalMinutes}+ minutes${isRepeat ? ` (repeat ${repeatCount})` : ''}`);
+
+    // Track that at least one alert was sent (used for "now closed" notification)
+    zoneAlertFired[timerKey] = rule;
 
     if (rule.action === 'email' || rule.action === 'both') {
       await sendAlert(
@@ -300,12 +311,13 @@ function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
       );
     }
 
-    // Schedule repeat alert if configured
+    // Schedule repeat alert if configured; re-check zone is still open after awaits
     const repeatIntervalMs = (rule.repeatInterval || 0) * 60 * 1000;
     const nextRepeat = repeatCount + 1;
     const maxRepeats = rule.maxRepeats || 0;  // 0 = unlimited
 
-    if (repeatIntervalMs > 0 && (maxRepeats === 0 || nextRepeat <= maxRepeats)) {
+    if (repeatIntervalMs > 0 && (maxRepeats === 0 || nextRepeat <= maxRepeats)
+        && zoneOpenTimes[zoneKey] === openedAt) {
       zoneRepeatCounts[timerKey] = nextRepeat;
       startRuleTimer(zoneKey, rule, ruleIndex, repeatIntervalMs, nextRepeat);
       if (DEBUG) logToFile(`Repeat timer set: ${zoneName} (rule ${ruleIndex}) will alert again in ${rule.repeatInterval} min`);
@@ -316,7 +328,7 @@ function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
   }, delayMs);
 }
 
-function evaluateRules(parsed) {
+async function evaluateRules(parsed) {
   if (rules.length === 0 || parsed.zone === null) return;
 
   const zoneKey = String(parsed.zone);
@@ -338,6 +350,7 @@ function evaluateRules(parsed) {
         clearTimeout(zoneOpenTimers[timerKey]);
       }
       delete zoneRepeatCounts[timerKey];
+      delete zoneAlertFired[timerKey];
 
       startRuleTimer(zoneKey, rule, ruleIndex, delayMs, 0);
 
@@ -346,16 +359,58 @@ function evaluateRules(parsed) {
   }
 
   if (parsed.event === 'Zone Close') {
-    // Cancel all pending timers for this zone
+    const zoneName = getZoneNameLocal(zoneKey);
+    const openedAt = zoneOpenTimes[zoneKey];
+    const closedAt = new Date();
+
+    // Snapshot rules that fired alerts for this zone before clearing state
+    const firedRules = [];
+    for (const key of Object.keys(zoneAlertFired)) {
+      if (key.startsWith(`${zoneKey}:`)) {
+        firedRules.push(zoneAlertFired[key]);
+      }
+    }
+
+    // Synchronously clear ALL per-zone state before any async work
     for (const key of Object.keys(zoneOpenTimers)) {
       if (key.startsWith(`${zoneKey}:`)) {
         clearTimeout(zoneOpenTimers[key]);
         delete zoneOpenTimers[key];
         delete zoneRepeatCounts[key];
+        delete zoneAlertFired[key];
+      }
+    }
+    for (const key of Object.keys(zoneAlertFired)) {
+      if (key.startsWith(`${zoneKey}:`)) {
+        delete zoneAlertFired[key];
       }
     }
     delete zoneOpenTimes[zoneKey];
-    if (DEBUG) logToFile(`Timer(s) cleared: zone ${zoneKey} closed before alert`);
+
+    if (DEBUG) logToFile(`Timer(s) cleared: zone ${zoneKey} closed${firedRules.length > 0 ? ' (close notification sent)' : ' before alert'}`);
+
+    // Send "now closed" notifications using snapshots (no mutable state accessed after this point)
+    for (const rule of firedRules) {
+      const totalMs = openedAt ? closedAt.getTime() - openedAt.getTime() : 0;
+      const totalMinutes = Math.round(totalMs / (60 * 1000));
+      const durationText = openedAt ? ` after ${totalMinutes} minutes` : '';
+
+      logToFile(`Zone closed notification: ${zoneName} is now closed${durationText}`);
+
+      if (rule.action === 'email' || rule.action === 'both') {
+        await sendAlert(
+          `✅ ${zoneName} is now closed`,
+          `${zoneName} has been closed${durationText}.\n\nOpened at: ${openedAt ? formatLocalTime(openedAt) : 'unknown'}\nClosed at: ${formatLocalTime(closedAt)}\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}`
+        );
+      }
+      if (rule.action === 'ntfy' || rule.action === 'both') {
+        await sendNtfy(
+          `✅ ${zoneName} now closed${durationText}`,
+          `Closed at ${formatLocalTime(closedAt)}${openedAt ? `, was open since ${formatLocalTime(openedAt)}` : ''}`,
+          'default'
+        );
+      }
+    }
   }
 }
 
@@ -439,7 +494,7 @@ server.on('message', async (msg, rinfo) => {
   await postToGoogleSheets(parsed);
 
   // Evaluate alert rules (e.g., zone open too long)
-  evaluateRules(parsed);
+  await evaluateRules(parsed);
 
   // Send email alerts based on configuration
   if (parsed.event === 'Alarm') {
