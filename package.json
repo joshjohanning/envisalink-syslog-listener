@@ -12,7 +12,7 @@
   "dependencies": {
     "form-data": "^4.0.4",
     "mailgun.js": "^10.2.1",
-    "yargs": "^17.7.2"
+    "yargs": "^18.0.0"
   },
   "devDependencies": {
     "jest": "^29.7.0"
