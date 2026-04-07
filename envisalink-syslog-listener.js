@@ -248,13 +248,17 @@ async function sendNtfy(title, message, priority) {
   try {
     const https = require('https');
     const payload = message;
+    // RFC 2047 base64-encode title if it contains non-ASCII (e.g. emojis)
+    const encodedTitle = /[^\x00-\x7F]/.test(title)
+      ? `=?UTF-8?B?${Buffer.from(title, 'utf8').toString('base64')}?=`
+      : title;
     await new Promise((resolve, reject) => {
       const req = https.request({
         hostname: 'ntfy.sh',
         path: `/${encodeURIComponent(NTFY_TOPIC)}`,
         method: 'POST',
         headers: {
-          'Title': title,
+          'Title': encodedTitle,
           'Priority': priority || 'default',
           'Tags': 'house'
         }
