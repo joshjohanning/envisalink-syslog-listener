@@ -136,6 +136,7 @@ const bypassServer = new BypassServer({
   bypassPath: BYPASS_PATH,
   debug: DEBUG,
   logFn: logToFile,
+  ntfyFn: sendNtfy,
   zones
 });
 

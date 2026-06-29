@@ -17,6 +17,7 @@ class BypassServer {
     this.bypassPath = options.bypassPath || path.join(__dirname, 'bypasses.json');
     this.debug = options.debug || false;
     this.logFn = options.logFn || console.log;
+    this.ntfyFn = options.ntfyFn || null;
     this.zones = options.zones || {};
     this.bypasses = {}; // zone -> { activatedAt, expiresAt (null = indefinite) }
     this.server = null;
@@ -80,7 +81,12 @@ class BypassServer {
       expiresAt: validMinutes ? now + validMinutes * 60 * 1000 : null
     };
     this._save();
+    const zoneName = this.zones[key] || `Zone ${key}`;
     this.logFn(`Bypass: activated for zone ${key}${validMinutes ? ` (expires in ${validMinutes} min)` : ' (indefinite)'}`);
+    if (this.ntfyFn) {
+      const duration = validMinutes ? ` for ${validMinutes} min` : ' (indefinite)';
+      this.ntfyFn(`🔕 Bypass activated: ${zoneName}`, `Alerts suppressed for ${zoneName}${duration}`, 'low');
+    }
     return this.bypasses[key];
   }
 
@@ -90,7 +96,11 @@ class BypassServer {
     delete this.bypasses[key];
     this._save();
     if (existed) {
+      const zoneName = this.zones[key] || `Zone ${key}`;
       this.logFn(`Bypass: deactivated for zone ${key}`);
+      if (this.ntfyFn) {
+        this.ntfyFn(`🔔 Bypass cancelled: ${zoneName}`, `Alerts resumed for ${zoneName}`, 'low');
+      }
     }
     return existed;
   }
