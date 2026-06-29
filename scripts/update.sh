@@ -16,6 +16,12 @@ git pull --ff-only
 echo "Installing dependencies ..."
 npm ci --omit=dev
 
+LOGROTATE_FILE="${REPO_DIR}/${SERVICE_NAME}.logrotate"
+if [[ -f "$LOGROTATE_FILE" ]]; then
+  echo "Updating logrotate config ..."
+  sudo cp "$LOGROTATE_FILE" /etc/logrotate.d/"$SERVICE_NAME"
+fi
+
 echo "Restarting $SERVICE_NAME ..."
 sudo systemctl restart "$SERVICE_NAME"
 

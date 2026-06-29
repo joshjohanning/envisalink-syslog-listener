@@ -19,6 +19,12 @@ fi
 echo "Copying $SERVICE_FILE to /etc/systemd/system/ ..."
 sudo cp "$SERVICE_FILE" /etc/systemd/system/
 
+LOGROTATE_FILE="${REPO_DIR}/${SERVICE_NAME}.logrotate"
+if [[ -f "$LOGROTATE_FILE" ]]; then
+  echo "Installing logrotate config ..."
+  sudo cp "$LOGROTATE_FILE" /etc/logrotate.d/"$SERVICE_NAME"
+fi
+
 echo "Reloading systemd daemon ..."
 sudo systemctl daemon-reload
 

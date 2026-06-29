@@ -350,6 +350,18 @@ sudo systemctl stop envisalink-syslog-listener
 > ./scripts/install-service.sh
 > ```
 
+### Log rotation
+
+The log file (`envisalink-syslog-listener.log`) grows indefinitely. A logrotate config is included to rotate it weekly and keep 4 compressed backups. The install script copies it automatically, or you can install it manually:
+
+```sh
+sudo cp envisalink-syslog-listener.logrotate /etc/logrotate.d/envisalink-syslog-listener
+```
+
+This uses `copytruncate` so the running process continues writing without needing a restart or signal. Logs rotate weekly, keeping 4 weeks of history for local debugging.
+
+> **Note:** `logrotate` is pre-installed on Raspberry Pi OS / Debian. No additional packages are needed.
+
 ## Updating
 
 Pull the latest code, install dependencies, and restart the service:
