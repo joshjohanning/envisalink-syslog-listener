@@ -122,7 +122,7 @@ nano rules.json
 
 #### `open_duration`
 
-Send an alert if a zone stays open for longer than a specified number of minutes. The alert is cancelled if the zone closes before the timer expires.
+Send an alert if a zone stays open for longer than a specified number of minutes. The alert is cancelled if the zone closes before the timer expires. If the zone closes **after** an alert has already been sent, a final "now closed" notification is sent via the same channel so you know the zone has been secured.
 
 The `action` field controls how you're notified:
 
@@ -140,7 +140,7 @@ Optional fields:
 | `repeatInterval` | -- | Minutes between repeat alerts while the zone stays open |
 | `maxRepeats` | `0` (unlimited) | Maximum number of repeat alerts (0 = no limit) |
 
-Repeat alerts include "still open" in the message and show the total time the zone has been open.
+Repeat alerts include "still open" in the message and show the total time the zone has been open. When the zone finally closes, a "now closed" notification is sent with the total duration it was open.
 
 ```json
 [
