@@ -84,7 +84,7 @@ class BypassServer {
     const zoneName = this.zones[key] || `Zone ${key}`;
     this.logFn(`Bypass: activated for zone ${key}${validMinutes ? ` (expires in ${validMinutes} min)` : ' (indefinite)'}`);
     if (this.ntfyFn) {
-      const duration = validMinutes ? ` for ${validMinutes} min` : ' (indefinite)';
+      const duration = validMinutes ? ` (${validMinutes} min)` : ' (indefinite)';
       this.ntfyFn(`🔕 Bypass activated: ${zoneName}`, `Alerts suppressed for ${zoneName}${duration}`, 'low');
     }
     return this.bypasses[key];

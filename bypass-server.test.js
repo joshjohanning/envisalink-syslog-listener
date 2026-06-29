@@ -100,6 +100,71 @@ describe('BypassServer', () => {
     });
   });
 
+  describe('ntfyFn callback', () => {
+    let ntfyServer;
+    let ntfyMock;
+
+    beforeEach(() => {
+      ntfyMock = jest.fn();
+      ntfyServer = new BypassServer({
+        bypassPath: path.join(__dirname, '.test-ntfy-bypasses.json'),
+        logFn: () => {},
+        ntfyFn: ntfyMock,
+        zones: { '3': 'Garage Door' }
+      });
+    });
+
+    afterEach(() => {
+      try { fs.unlinkSync(path.join(__dirname, '.test-ntfy-bypasses.json')); } catch {}
+    });
+
+    test('activate calls ntfyFn with correct args', () => {
+      ntfyServer.activate('3', 60);
+      expect(ntfyMock).toHaveBeenCalledWith(
+        '🔕 Bypass activated: Garage Door',
+        'Alerts suppressed for Garage Door (60 min)',
+        'low'
+      );
+    });
+
+    test('activate indefinite calls ntfyFn', () => {
+      ntfyServer.activate('3');
+      expect(ntfyMock).toHaveBeenCalledWith(
+        '🔕 Bypass activated: Garage Door',
+        'Alerts suppressed for Garage Door (indefinite)',
+        'low'
+      );
+    });
+
+    test('deactivate calls ntfyFn with correct args', () => {
+      ntfyServer.activate('3');
+      ntfyMock.mockClear();
+      ntfyServer.deactivate('3');
+      expect(ntfyMock).toHaveBeenCalledWith(
+        '🔔 Bypass cancelled: Garage Door',
+        'Alerts resumed for Garage Door',
+        'low'
+      );
+    });
+
+    test('deactivate does not call ntfyFn if zone was not bypassed', () => {
+      ntfyMock.mockClear();
+      ntfyServer.deactivate('99');
+      expect(ntfyMock).not.toHaveBeenCalled();
+    });
+
+    test('ntfyFn not called when not provided', () => {
+      const plainServer = new BypassServer({
+        bypassPath: path.join(__dirname, '.test-plain-bypasses.json'),
+        logFn: () => {},
+        zones: { '3': 'Garage Door' }
+      });
+      plainServer.activate('3');
+      plainServer.deactivate('3');
+      try { fs.unlinkSync(path.join(__dirname, '.test-plain-bypasses.json')); } catch {}
+    });
+  });
+
   describe('toggle', () => {
     test('toggle on then off', () => {
       expect(server.toggle('3')).toBe(true);
