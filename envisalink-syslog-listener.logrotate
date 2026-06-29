@@ -1,3 +1,4 @@
+# Update the path below if your repo is cloned somewhere other than /home/pi/
 /home/pi/envisalink-syslog-listener/envisalink-syslog-listener.log {
     weekly
     rotate 4
