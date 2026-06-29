@@ -11,13 +11,13 @@ SERVICE_NAME="envisalink-syslog-listener"
 cd "$REPO_DIR"
 
 echo "Pulling latest changes ..."
-git pull
+git pull --ff-only
 
 echo "Installing dependencies ..."
-npm install --production
+npm ci --omit=dev
 
 echo "Restarting $SERVICE_NAME ..."
 sudo systemctl restart "$SERVICE_NAME"
 
 echo "Done. Status:"
-systemctl status "$SERVICE_NAME" --no-pager
+sudo systemctl status "$SERVICE_NAME" --no-pager
