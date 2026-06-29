@@ -131,7 +131,7 @@ describe('BypassServer', () => {
       ntfyServer.activate('3');
       expect(ntfyMock).toHaveBeenCalledWith(
         '🔕 Bypass activated: Garage Door',
-        'Alerts suppressed for Garage Door (indefinite)',
+        'Alerts suppressed for Garage Door',
         'low'
       );
     });
