@@ -45,6 +45,7 @@ const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const { parseSyslogMessage, getZoneName } = require('./parser');
+const BypassServer = require('./bypass-server');
 
 const argv = yargs(hideBin(process.argv))
   .option('port', { type: 'number', default: 514, describe: 'UDP port to listen on' })
@@ -64,6 +65,8 @@ const argv = yargs(hideBin(process.argv))
   .option('rulesPath', { type: 'string', default: path.join(__dirname, 'rules.json'), describe: 'Path to alert rules config' })
   .option('heartbeatMinutes', { type: 'number', default: 0, describe: 'Alert if no syslog activity for this many minutes (0 = disabled)' })
   .option('heartbeatChannel', { type: 'string', default: 'all', describe: 'Heartbeat alert channel: all, email, ntfy (default: all)' })
+  .option('apiPort', { type: 'number', default: 3000, describe: 'HTTP port for the bypass API server' })
+  .option('bypassPath', { type: 'string', default: path.join(__dirname, 'bypasses.json'), describe: 'Path to bypass persistence file' })
   .argv;
 
 // Resolve config
@@ -86,6 +89,8 @@ const EMAIL_TO = (argv.emailTo || process.env.EMAIL_TO || '').split(',').map(s =
 const RULES_PATH = argv.rulesPath;
 const HEARTBEAT_MINUTES = argv.heartbeatMinutes || parseInt(process.env.HEARTBEAT_MINUTES, 10) || 0;
 const HEARTBEAT_CHANNEL = (argv.heartbeatChannel || process.env.HEARTBEAT_CHANNEL || 'all').toLowerCase();
+const API_PORT = argv.apiPort || parseInt(process.env.API_PORT, 10) || 3000;
+const BYPASS_PATH = argv.bypassPath || process.env.BYPASS_PATH || path.join(__dirname, 'bypasses.json');
 
 // Optional mailgun setup -- only require if we need it
 let mg = null;
@@ -124,6 +129,15 @@ if (fs.existsSync(RULES_PATH)) {
     logToFile(`Warning: Could not load rules file (${RULES_PATH}): ${err.message}`);
   }
 }
+
+// Bypass server instance
+const bypassServer = new BypassServer({
+  port: API_PORT,
+  bypassPath: BYPASS_PATH,
+  debug: DEBUG,
+  logFn: logToFile,
+  zones
+});
 
 // Zone state tracking for duration-based rules
 const zoneOpenTimers = {};    // "zone:ruleIndex" -> setTimeout ID
@@ -288,6 +302,24 @@ function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
     if (!openedAt) {
       delete zoneOpenTimers[timerKey];
       delete zoneRepeatCounts[timerKey];
+      return;
+    }
+
+    // Check if zone is currently bypassed
+    if (bypassServer.isBypassed(zoneKey)) {
+      logToFile(`Alert suppressed (bypass active): ${zoneName} rule ${ruleIndex}`);
+      // Still schedule repeat so alert fires if bypass is lifted while zone is still open
+      const repeatIntervalMs = (rule.repeatInterval || 0) * 60 * 1000;
+      const nextRepeat = repeatCount + 1;
+      const maxRepeats = rule.maxRepeats || 0;
+      if (repeatIntervalMs > 0 && (maxRepeats === 0 || nextRepeat <= maxRepeats)
+          && zoneOpenTimes[zoneKey] === openedAt) {
+        zoneRepeatCounts[timerKey] = nextRepeat;
+        startRuleTimer(zoneKey, rule, ruleIndex, repeatIntervalMs, nextRepeat);
+      } else {
+        delete zoneOpenTimers[timerKey];
+        delete zoneRepeatCounts[timerKey];
+      }
       return;
     }
 
@@ -500,8 +532,13 @@ server.on('message', async (msg, rinfo) => {
   // Evaluate alert rules (e.g., zone open too long)
   await evaluateRules(parsed);
 
-  // Send email alerts based on configuration
-  if (parsed.event === 'Alarm') {
+  // Send email alerts based on configuration (skip if zone is bypassed)
+  const zoneBypassedForAlerts = parsed.zone !== null && bypassServer.isBypassed(String(parsed.zone));
+  if (zoneBypassedForAlerts && (parsed.event === 'Alarm' || (EMAIL_ON_OPEN && parsed.event === 'Zone Open'))) {
+    logToFile(`Alert suppressed (bypass active): ${parsed.event} for ${parsed.zoneName}`);
+  }
+
+  if (parsed.event === 'Alarm' && !zoneBypassedForAlerts) {
     if (EMAIL_ON_ALARM) {
       await sendAlert(
         `🚨 EnvisaLink Alarm: ${parsed.zoneName || 'System'}`,
@@ -517,7 +554,7 @@ server.on('message', async (msg, rinfo) => {
     }
   }
 
-  if (EMAIL_ON_OPEN && parsed.event === 'Zone Open') {
+  if (EMAIL_ON_OPEN && parsed.event === 'Zone Open' && !zoneBypassedForAlerts) {
     await sendAlert(
       `🚪 Zone Opened: ${parsed.zoneName}`,
       `A zone was opened.\n\nDetails:\n- Zone: ${parsed.zoneName}\n- Time: ${formatLocalTime(parsed.timestamp)}\n- Raw message: ${parsed.message}`
@@ -562,6 +599,8 @@ server.on('listening', () => {
   }
 
   startHeartbeat();
+  bypassServer.start();
+  console.log(`Bypass API: http://localhost:${API_PORT}/bypasses`);
 });
 
 server.bind(PORT);

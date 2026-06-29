@@ -70,6 +70,8 @@ sudo node envisalink-syslog-listener.js --debug --dryRun
 | `--rulesPath` | `./rules.json` | Path to alert rules config |
 | `--heartbeatMinutes` | `0` | Alert if no syslog activity for N minutes (0 = disabled) |
 | `--heartbeatChannel` | `all` | Heartbeat alert channel: `all`, `email`, or `ntfy` |
+| `--apiPort` | `3000` | HTTP port for the bypass API server |
+| `--bypassPath` | `./bypasses.json` | Path to bypass persistence file |
 
 > **Note:** Port 514 requires root/`sudo`. Alternatively, use a higher port and redirect with iptables:
 >
@@ -166,6 +168,72 @@ Repeat alerts include "still open" in the message and show the total time the zo
 ```
 
 Requires Mailgun for `email`/`both` actions, and `--NTFY_TOPIC` for `ntfy`/`both` actions.
+
+## Notification Bypass
+
+Temporarily suppress alert notifications for specific zones via an HTTP API. Useful when you intentionally leave a zone open (e.g., airing out the garage) and don't want repeated alerts.
+
+When a zone is bypassed:
+- Alert rules (email/ntfy) are **suppressed**
+- Log file entries and Google Sheets logging **continue normally**
+- A log entry notes that the alert was suppressed due to bypass
+
+### CLI Options
+
+| Option | Default | Description |
+|---|---|---|
+| `--apiPort` | `3000` | HTTP port for the bypass API server |
+| `--bypassPath` | `./bypasses.json` | Path to bypass persistence file |
+
+### API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/bypasses` | List all active bypasses |
+| `POST` | `/bypass/:zone` | Activate bypass for zone (optional `?minutes=N` for auto-expiry) |
+| `DELETE` | `/bypass/:zone` | Cancel bypass for zone |
+| `GET` | `/bypass/:zone/status` | Check if zone is currently bypassed |
+| `POST` | `/bypass/:zone/toggle` | Toggle bypass on/off |
+
+### Examples
+
+```sh
+# Bypass zone 3 (indefinite, until manually cancelled)
+curl -X POST http://localhost:3000/bypass/3
+
+# Bypass zone 3 for 90 minutes (auto-expires)
+curl -X POST "http://localhost:3000/bypass/3?minutes=90"
+
+# Cancel bypass for zone 3
+curl -X DELETE http://localhost:3000/bypass/3
+
+# Check if zone 3 is bypassed
+curl http://localhost:3000/bypass/3/status
+
+# Toggle bypass on/off
+curl -X POST http://localhost:3000/bypass/3/toggle
+
+# List all active bypasses
+curl http://localhost:3000/bypasses
+```
+
+### Homebridge Integration
+
+Use the [homebridge-cmdtriggerswitch](https://github.com/hans-1/homebridge-cmdtriggerswitch) plugin to expose a bypass toggle as a HomeKit switch:
+
+```json
+{
+  "accessory": "CmdTriggerSwitch",
+  "name": "Bypass Garage Alerts",
+  "on_cmd": "curl -s -X POST http://localhost:3000/bypass/3",
+  "off_cmd": "curl -s -X DELETE http://localhost:3000/bypass/3",
+  "stateful": true
+}
+```
+
+With `stateful: true`, the switch maintains its on/off state in HomeKit. You can then use HomeKit automations to auto-turn-off after a set time if desired.
+
+Bypasses persist across restarts (saved to `bypasses.json`).
 
 ## Heartbeat Monitoring
 
