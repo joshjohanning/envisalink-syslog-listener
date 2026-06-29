@@ -2,10 +2,13 @@
 set -euo pipefail
 
 # Copies the local service file to systemd, reloads, and restarts the service.
-# Usage: ./update-service.sh
+# Usage: ./scripts/install-service.sh
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
 SERVICE_NAME="envisalink-syslog-listener"
-SERVICE_FILE="${SERVICE_NAME}.service"
+SERVICE_FILE="${REPO_DIR}/${SERVICE_NAME}.service"
 
 if [[ ! -f "$SERVICE_FILE" ]]; then
   echo "Error: $SERVICE_FILE not found in current directory."

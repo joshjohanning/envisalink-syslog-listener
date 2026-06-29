@@ -279,8 +279,16 @@ sudo systemctl stop envisalink-syslog-listener
 > **Note:** If you edit the `.service` file after copying, re-run the install script:
 >
 > ```sh
-> ./install-service.sh
+> ./scripts/install-service.sh
 > ```
+
+## Updating
+
+Pull the latest code, install dependencies, and restart the service:
+
+```sh
+./scripts/update.sh
+```
 
 ## Testing
 
