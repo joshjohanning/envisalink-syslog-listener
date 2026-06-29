@@ -74,12 +74,13 @@ class BypassServer {
   activate(zone, minutes) {
     const key = String(zone);
     const now = Date.now();
+    const validMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : null;
     this.bypasses[key] = {
       activatedAt: now,
-      expiresAt: minutes ? now + minutes * 60 * 1000 : null
+      expiresAt: validMinutes ? now + validMinutes * 60 * 1000 : null
     };
     this._save();
-    this.logFn(`Bypass: activated for zone ${key}${minutes ? ` (expires in ${minutes} min)` : ' (indefinite)'}`);
+    this.logFn(`Bypass: activated for zone ${key}${validMinutes ? ` (expires in ${validMinutes} min)` : ' (indefinite)'}`);
     return this.bypasses[key];
   }
 
@@ -107,20 +108,31 @@ class BypassServer {
   listActive() {
     const now = Date.now();
     const result = {};
+    let pruned = false;
     for (const [zone, entry] of Object.entries(this.bypasses)) {
-      if (entry.expiresAt && entry.expiresAt <= now) continue;
+      if (entry.expiresAt && entry.expiresAt <= now) {
+        delete this.bypasses[zone];
+        pruned = true;
+        continue;
+      }
       result[zone] = {
         ...entry,
         zoneName: this.zones[zone] || `Zone ${zone}`,
         remainingMinutes: entry.expiresAt ? Math.round((entry.expiresAt - now) / 60000) : null
       };
     }
+    if (pruned) this._save();
     return result;
   }
 
   start() {
     this.server = http.createServer((req, res) => {
       this._handleRequest(req, res);
+    });
+
+    this.server.on('error', (err) => {
+      this.logFn(`Bypass API server error: ${err.message}`);
+      this.server = null;
     });
 
     this.server.listen(this.port, '127.0.0.1', () => {
@@ -156,6 +168,15 @@ class BypassServer {
       const zone = decodeURIComponent(pathParts[1]);
       const subPath = pathParts[2] || null;
 
+      // Parse optional minutes param with validation
+      const parseMinutes = () => {
+        const raw = url.searchParams.get('minutes');
+        if (raw === null) return null;
+        const val = parseInt(raw, 10);
+        if (!Number.isFinite(val) || val <= 0) return 'invalid';
+        return val;
+      };
+
       // GET /bypass/:zone/status
       if (req.method === 'GET' && subPath === 'status') {
         const bypassed = this.isBypassed(zone);
@@ -166,7 +187,12 @@ class BypassServer {
 
       // POST /bypass/:zone/toggle
       if (req.method === 'POST' && subPath === 'toggle') {
-        const minutes = url.searchParams.get('minutes') ? parseInt(url.searchParams.get('minutes'), 10) : null;
+        const minutes = parseMinutes();
+        if (minutes === 'invalid') {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'minutes must be a positive integer' }));
+          return;
+        }
         const nowActive = this.toggle(zone, minutes);
         res.writeHead(200);
         res.end(JSON.stringify({ zone, bypassed: nowActive, zoneName: this.zones[zone] || `Zone ${zone}` }));
@@ -175,7 +201,12 @@ class BypassServer {
 
       // POST /bypass/:zone - activate
       if (req.method === 'POST' && !subPath) {
-        const minutes = url.searchParams.get('minutes') ? parseInt(url.searchParams.get('minutes'), 10) : null;
+        const minutes = parseMinutes();
+        if (minutes === 'invalid') {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'minutes must be a positive integer' }));
+          return;
+        }
         const entry = this.activate(zone, minutes);
         res.writeHead(200);
         res.end(JSON.stringify({ zone, bypassed: true, ...entry, zoneName: this.zones[zone] || `Zone ${zone}` }));

@@ -65,8 +65,8 @@ const argv = yargs(hideBin(process.argv))
   .option('rulesPath', { type: 'string', default: path.join(__dirname, 'rules.json'), describe: 'Path to alert rules config' })
   .option('heartbeatMinutes', { type: 'number', default: 0, describe: 'Alert if no syslog activity for this many minutes (0 = disabled)' })
   .option('heartbeatChannel', { type: 'string', default: 'all', describe: 'Heartbeat alert channel: all, email, ntfy (default: all)' })
-  .option('apiPort', { type: 'number', default: 3000, describe: 'HTTP port for the bypass API server' })
-  .option('bypassPath', { type: 'string', default: path.join(__dirname, 'bypasses.json'), describe: 'Path to bypass persistence file' })
+  .option('apiPort', { type: 'number', describe: 'HTTP port for the bypass API server (default: 3000)' })
+  .option('bypassPath', { type: 'string', describe: 'Path to bypass persistence file (default: ./bypasses.json)' })
   .argv;
 
 // Resolve config

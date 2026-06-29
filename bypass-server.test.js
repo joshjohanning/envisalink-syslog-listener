@@ -15,7 +15,8 @@ function makeRequest(port, method, urlPath) {
       hostname: 'localhost',
       port,
       path: urlPath,
-      method
+      method,
+      headers: { 'Connection': 'close' }
     }, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
@@ -139,9 +140,8 @@ describe('BypassServer', () => {
 
   describe('HTTP API', () => {
     beforeEach((done) => {
-      server.start();
-      // Wait for server to be listening
-      setTimeout(done, 50);
+      const srv = server.start();
+      srv.on('listening', done);
     });
 
     test('GET /bypasses returns empty object initially', async () => {
@@ -203,6 +203,22 @@ describe('BypassServer', () => {
       expect(res.status).toBe(200);
       expect(res.body['3'].zoneName).toBe('Garage Door');
       expect(res.body['3'].remainingMinutes).toBeNull();
+    });
+
+    test('POST /bypass/:zone?minutes=0 returns 400', async () => {
+      const res = await makeRequest(PORT, 'POST', '/bypass/3?minutes=0');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/positive integer/);
+    });
+
+    test('POST /bypass/:zone?minutes=abc returns 400', async () => {
+      const res = await makeRequest(PORT, 'POST', '/bypass/3?minutes=abc');
+      expect(res.status).toBe(400);
+    });
+
+    test('POST /bypass/:zone?minutes=-5 returns 400', async () => {
+      const res = await makeRequest(PORT, 'POST', '/bypass/3?minutes=-5');
+      expect(res.status).toBe(400);
     });
   });
 });
