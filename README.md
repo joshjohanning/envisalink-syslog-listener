@@ -1,8 +1,10 @@
 # envisalink-syslog-listener
 
-Syslog listener for the [EyezOn EnvisaLink 4 (EVL4)](https://www.eyezon.com/evl4.html) module. Logs zone events (door open/close, arm/disarm, alarms, CID events) over UDP with friendly zone names, optional email alerts (Mailgun), push notifications ([ntfy.sh](https://ntfy.sh)), Google Sheets logging, and configurable alert rules.
+Syslog listener for the [EyezOn EnvisaLink 4 (EVL4)](https://www.eyezon.com/evl4.html) module. Logs zone events (door open/close, arm/disarm, alarms, CID events) over UDP with friendly zone names, optional [email alerts](https://github.com/joshjohanning/envisalink-syslog-listener#usage) ([Mailgun](https://www.mailgun.com/)), [push notifications](https://github.com/joshjohanning/envisalink-syslog-listener#push-notifications-ntfysh) ([ntfy.sh](https://ntfy.sh)), [Google Sheets logging](https://github.com/joshjohanning/envisalink-syslog-listener#google-sheets-logging), and configurable alert rules.
 
 This uses the EVL4's built-in **syslog sender** (UDP port 514) -- it does **not** use the TPI connection (port 4025), so it won't conflict with Homebridge, Home Assistant, or any other TPI client.
+
+<img width="1674" height="846" alt="envisalink-syslog-listener terminal output" src="https://github.com/user-attachments/assets/c5f98a2f-5710-4cad-ba15-c69c674fd896" />
 
 ## EVL4 Configuration
 
