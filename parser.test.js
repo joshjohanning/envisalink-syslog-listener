@@ -22,7 +22,7 @@ describe('getZoneName', () => {
   });
 
   test('returns generic name for an unknown zone', () => {
-    expect(getZoneName(testZones, 200)).toBe('Zone 200');
+    expect(getZoneName(testZones, 42)).toBe('Zone 42');
   });
 
   test('returns generic name when zones dictionary is empty', () => {

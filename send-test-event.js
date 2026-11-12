@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 //
-// Sends a fake EVL4 syslog message to the listener for testing.
+// Sends a simulated EVL4 syslog message to the listener for testing.
 //
 // Usage:
-//   node send-test-event.js                    # sends a Zone Open for zone 9
+//   node send-test-event.js                    # sends a simulated Zone Open for zone 999
 //   node send-test-event.js "Zone Closed: 4"   # sends a custom message
 //   node send-test-event.js --port 5514        # send to a different port
 //   node send-test-event.js --host 192.168.1.5 # send to a remote host
@@ -29,7 +29,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 if (!message) {
-  message = 'Zone Open: 200';
+  message = 'Zone Open: 999';
 }
 
 // Wrap in EVL4 syslog format
