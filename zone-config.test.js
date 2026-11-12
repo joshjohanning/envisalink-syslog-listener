@@ -64,6 +64,46 @@ describe('watchZonesConfig', () => {
     await waitFor(() => onReload.mock.calls.length === 2);
     expect(onReload).toHaveBeenLastCalledWith({ '2': 'Back Door Updated' });
   });
+
+  test('watches symlink targets and refreshes the target watch when the link changes', async () => {
+    const targetDirectory = path.join(directory, 'targets');
+    fs.mkdirSync(targetDirectory);
+    const firstTarget = path.join(targetDirectory, 'first.json');
+    const secondTarget = path.join(targetDirectory, 'second.json');
+    fs.writeFileSync(firstTarget, '{"2":"First Target"}');
+    fs.writeFileSync(secondTarget, '{"2":"Second Target"}');
+    fs.unlinkSync(zonesPath);
+    fs.symlinkSync(firstTarget, zonesPath);
+
+    const onReload = jest.fn();
+    const onError = jest.fn();
+    watcher = watchZonesConfig(zonesPath, { onReload, onError, debounceMs: 20 });
+
+    const replaceTarget = (targetPath, content) => {
+      const temporaryPath = `${targetPath}.tmp`;
+      fs.writeFileSync(temporaryPath, content);
+      fs.renameSync(temporaryPath, targetPath);
+    };
+
+    replaceTarget(firstTarget, '{"2":"First Target Updated"}');
+    await waitFor(() => onReload.mock.calls.length === 1);
+    expect(onReload).toHaveBeenLastCalledWith({ '2': 'First Target Updated' });
+
+    const temporaryLink = `${zonesPath}.tmp`;
+    fs.symlinkSync(secondTarget, temporaryLink);
+    fs.renameSync(temporaryLink, zonesPath);
+    await waitFor(() => onReload.mock.calls.length === 2);
+    expect(onReload).toHaveBeenLastCalledWith({ '2': 'Second Target' });
+
+    replaceTarget(firstTarget, '{"2":"Stale Target"}');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(onReload).toHaveBeenCalledTimes(2);
+
+    replaceTarget(secondTarget, '{"2":"Second Target Updated"}');
+    await waitFor(() => onReload.mock.calls.length === 3);
+    expect(onReload).toHaveBeenLastCalledWith({ '2': 'Second Target Updated' });
+    expect(onError).not.toHaveBeenCalled();
+  });
 });
 
 async function waitFor(condition) {

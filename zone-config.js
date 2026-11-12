@@ -21,12 +21,51 @@ function watchZonesConfig(zonesPath, { onReload, onError, debounceMs = 100 }) {
   const zonesDirectory = path.dirname(absolutePath);
   const zonesFilename = path.basename(absolutePath);
   let debounceTimer = null;
+  const watchers = new Map();
 
-  const watcher = fs.watch(zonesDirectory, (eventType, filename) => {
-    if (filename && filename.toString() !== zonesFilename) return;
+  function refreshWatchers() {
+    const directories = new Map();
+    const addPath = (filePath) => {
+      const directory = path.dirname(filePath);
+      if (!directories.has(directory)) directories.set(directory, new Set());
+      directories.get(directory).add(path.basename(filePath));
+    };
 
+    addPath(absolutePath);
+    try {
+      addPath(fs.realpathSync(absolutePath));
+    } catch (err) {
+      if (err.code !== 'ENOENT') onError(err);
+    }
+
+    for (const [directory, { watcher }] of watchers) {
+      if (!directories.has(directory)) {
+        watcher.close();
+        watchers.delete(directory);
+      }
+    }
+
+    for (const [directory, filenames] of directories) {
+      const existing = watchers.get(directory);
+      if (existing) {
+        existing.filenames = filenames;
+        continue;
+      }
+
+      const watcher = fs.watch(directory, (eventType, filename) => {
+        const current = watchers.get(directory);
+        if (!current || (filename && !current.filenames.has(filename.toString()))) return;
+        scheduleReload();
+      });
+      watcher.on('error', onError);
+      watchers.set(directory, { watcher, filenames });
+    }
+  }
+
+  function scheduleReload() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
+      refreshWatchers();
       let zones;
       try {
         zones = parseZonesConfig(fs.readFileSync(absolutePath, 'utf8'));
@@ -36,14 +75,15 @@ function watchZonesConfig(zonesPath, { onReload, onError, debounceMs = 100 }) {
       }
       onReload(zones);
     }, debounceMs);
-  });
+  }
 
-  watcher.on('error', onError);
+  refreshWatchers();
 
   return {
     close() {
       clearTimeout(debounceTimer);
-      watcher.close();
+      for (const { watcher } of watchers.values()) watcher.close();
+      watchers.clear();
     }
   };
 }
