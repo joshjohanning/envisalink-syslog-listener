@@ -93,11 +93,7 @@ nano zones.json
 
 > **Note:** If `zones.json` doesn't exist on startup, the app automatically creates it from `zones.sample.json` as a fallback.
 
-> **Note:** Changes to `zones.json` require a restart of the app or service to take effect:
->
-> ```sh
-> sudo systemctl restart envisalink-syslog-listener
-> ```
+> **Note:** Zone-name changes are detected automatically after saving `zones.json`; restarting the app or service is not required. Invalid or temporarily unavailable files leave the last valid mapping in use.
 
 ```json
 {

@@ -45,6 +45,7 @@ const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const { parseSyslogMessage, getZoneName } = require('./parser');
+const { parseZonesConfig, watchZonesConfig } = require('./zone-config');
 const BypassServer = require('./bypass-server');
 
 const argv = yargs(hideBin(process.argv))
@@ -110,7 +111,7 @@ if (!fs.existsSync(ZONES_PATH) && fs.existsSync(ZONES_SAMPLE_PATH)) {
 }
 try {
   const raw = fs.readFileSync(ZONES_PATH, 'utf8');
-  zones = JSON.parse(raw);
+  zones = parseZonesConfig(raw);
   logToFile(`Loaded ${Object.keys(zones).length} zone(s) from ${ZONES_PATH}`);
 } catch (err) {
   logToFile(`Warning: Could not load zones file (${ZONES_PATH}): ${err.message}. Zone numbers will be used as-is.`);
@@ -139,6 +140,21 @@ const bypassServer = new BypassServer({
   ntfyFn: sendNtfy,
   zones
 });
+
+try {
+  watchZonesConfig(ZONES_PATH, {
+    onReload: (updatedZones) => {
+      zones = updatedZones;
+      bypassServer.zones = zones;
+      logToFile(`Reloaded ${Object.keys(zones).length} zone(s) from ${ZONES_PATH}`);
+    },
+    onError: (err) => {
+      logToFile(`Warning: Could not reload zones file (${ZONES_PATH}): ${err.message}. Retaining the last valid zone mapping.`);
+    }
+  });
+} catch (err) {
+  logToFile(`Warning: Could not watch zones file (${ZONES_PATH}): ${err.message}. Hot reload is unavailable.`);
+}
 
 // Zone state tracking for duration-based rules
 const zoneOpenTimers = {};    // "zone:ruleIndex" -> setTimeout ID
@@ -295,7 +311,6 @@ async function sendNtfy(title, message, priority) {
 
 function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
   const timerKey = `${zoneKey}:${ruleIndex}`;
-  const zoneName = getZoneNameLocal(zoneKey);
 
   zoneOpenTimers[timerKey] = setTimeout(async () => {
     // Guard: zone may have closed (or re-opened) while we were waiting
@@ -305,6 +320,8 @@ function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
       delete zoneRepeatCounts[timerKey];
       return;
     }
+
+    const zoneName = getZoneNameLocal(zoneKey);
 
     // Check if zone is currently bypassed
     if (bypassServer.isBypassed(zoneKey)) {
