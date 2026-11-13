@@ -95,11 +95,7 @@ nano zones.json
 
 > **Note:** Existing `zones.json` and `rules.json` files are not overwritten. If you copied an older sample, manually replace the test-zone mapping `"200": "System Test"` with `"999": "Syslog Test Zone"` and update any test rule that refers to zone `200` to use `999` (or remove that test-only entry). The test sender simulates a syslog event only; it does not initiate a panel or system test.
 
-> **Note:** Changes to `zones.json` require a restart of the app or service to take effect:
->
-> ```sh
-> sudo systemctl restart envisalink-syslog-listener
-> ```
+> **Note:** Zone-name changes are detected automatically after saving `zones.json`; restarting the app or service is not required. Invalid or temporarily unavailable files leave the last valid mapping in use.
 
 ```json
 {
