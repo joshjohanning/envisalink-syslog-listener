@@ -93,6 +93,8 @@ nano zones.json
 
 > **Note:** If `zones.json` doesn't exist on startup, the app automatically creates it from `zones.sample.json` as a fallback.
 
+> **Note:** Existing `zones.json` and `rules.json` files are not overwritten. If you copied an older sample, manually replace the test-zone mapping `"200": "System Test"` with `"999": "Syslog Test Zone"` and update any test rule that refers to zone `200` to use `999` (or remove that test-only entry). The test sender simulates a syslog event only; it does not initiate a panel or system test.
+
 > **Note:** Zone-name changes are detected automatically after saving `zones.json`; restarting the app or service is not required. Invalid or temporarily unavailable files leave the last valid mapping in use.
 
 ```json
@@ -101,7 +103,8 @@ nano zones.json
   "2": "Back Door",
   "3": "Garage Door",
   "4": "Living Room Motion",
-  "5": "Master Bedroom Window"
+  "5": "Master Bedroom Window",
+  "999": "Syslog Test Zone"
 }
 ```
 
@@ -373,7 +376,7 @@ Pull the latest code, install dependencies, and restart the service:
 A test script is included to send fake EVL4 syslog messages to the listener without physically triggering a zone:
 
 ```sh
-# Send a default "Zone Open: 9" to localhost
+# Send a simulated "Zone Open: 999" syslog event to localhost
 node send-test-event.js
 
 # Send a custom event
@@ -388,7 +391,7 @@ node send-test-event.js --host 192.168.50.10 "Zone Open: 2"
 node send-test-event.js --port 5514 "Zone Open: 1"
 ```
 
-This sends a properly formatted syslog packet that the listener processes identically to a real EVL4 message, including logging to file, Google Sheets, and email alerts.
+This sends a properly formatted simulated syslog packet that the listener processes like a received EVL4 message, including logging to file, Google Sheets, and email alerts. It does not initiate a panel or system test.
 
 To run the unit tests:
 
