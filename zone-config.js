@@ -35,13 +35,16 @@ function watchZonesConfig(zonesPath, { onReload, onError, debounceMs = 100 }) {
     try {
       addPath(fs.realpathSync(absolutePath));
     } catch (err) {
-      if (err.code !== 'ENOENT') onError(err);
-    }
+      if (err.code !== 'ENOENT') throw err;
 
-    for (const [directory, { watcher }] of watchers) {
-      if (!directories.has(directory)) {
-        watcher.close();
-        watchers.delete(directory);
+      for (const [directory, { filenames }] of watchers) {
+        directories.set(directory, new Set(filenames));
+      }
+
+      try {
+        addPath(path.resolve(zonesDirectory, fs.readlinkSync(absolutePath)));
+      } catch (readlinkError) {
+        if (readlinkError.code !== 'ENOENT') throw readlinkError;
       }
     }
 
@@ -60,14 +63,21 @@ function watchZonesConfig(zonesPath, { onReload, onError, debounceMs = 100 }) {
       watcher.on('error', onError);
       watchers.set(directory, { watcher, filenames });
     }
+
+    for (const [directory, { watcher }] of watchers) {
+      if (!directories.has(directory)) {
+        watcher.close();
+        watchers.delete(directory);
+      }
+    }
   }
 
   function scheduleReload() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      refreshWatchers();
       let zones;
       try {
+        refreshWatchers();
         zones = parseZonesConfig(fs.readFileSync(absolutePath, 'utf8'));
       } catch (err) {
         onError(err);

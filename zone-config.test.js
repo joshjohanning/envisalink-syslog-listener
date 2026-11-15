@@ -104,6 +104,66 @@ describe('watchZonesConfig', () => {
     expect(onReload).toHaveBeenLastCalledWith({ '2': 'Second Target Updated' });
     expect(onError).not.toHaveBeenCalled();
   });
+
+  test('recovers when a symlink target is deleted and recreated', async () => {
+    const targetDirectory = path.join(directory, 'targets');
+    fs.mkdirSync(targetDirectory);
+    const targetPath = path.join(targetDirectory, 'zones.json');
+    fs.writeFileSync(targetPath, '{"2":"Original Target"}');
+    fs.unlinkSync(zonesPath);
+    fs.symlinkSync(targetPath, zonesPath);
+
+    const onReload = jest.fn();
+    const onError = jest.fn();
+    watcher = watchZonesConfig(zonesPath, { onReload, onError, debounceMs: 20 });
+
+    fs.unlinkSync(targetPath);
+    await waitFor(() => onError.mock.calls.length === 1);
+    expect(onError).toHaveBeenLastCalledWith(expect.objectContaining({ code: 'ENOENT' }));
+
+    const temporaryPath = `${targetPath}.tmp`;
+    fs.writeFileSync(temporaryPath, '{"2":"Recreated Target"}');
+    fs.renameSync(temporaryPath, targetPath);
+    await waitFor(() => onReload.mock.calls.length === 1);
+    expect(onReload).toHaveBeenLastCalledWith({ '2': 'Recreated Target' });
+  });
+
+  test('reports watcher creation errors without throwing from the reload timer', async () => {
+    const initialTargetDirectory = path.join(directory, 'initial-target');
+    const targetDirectory = path.join(directory, 'new-target');
+    fs.mkdirSync(initialTargetDirectory);
+    fs.mkdirSync(targetDirectory);
+    const initialTargetPath = path.join(initialTargetDirectory, 'zones.json');
+    const targetPath = path.join(targetDirectory, 'zones.json');
+    fs.writeFileSync(initialTargetPath, '{"2":"Target"}');
+    fs.writeFileSync(targetPath, '{"2":"Updated Target"}');
+    fs.unlinkSync(zonesPath);
+    fs.symlinkSync(initialTargetPath, zonesPath);
+
+    const onReload = jest.fn();
+    const onError = jest.fn();
+    watcher = watchZonesConfig(zonesPath, { onReload, onError, debounceMs: 20 });
+
+    const nativeWatch = fs.watch;
+    const watch = jest.spyOn(fs, 'watch');
+    const resolvedTargetDirectory = fs.realpathSync(targetDirectory);
+    const watchError = Object.assign(new Error('watch limit reached'), { code: 'ENOSPC' });
+    watch.mockImplementation((directoryPath, ...args) => {
+      if (directoryPath === resolvedTargetDirectory) throw watchError;
+      return nativeWatch(directoryPath, ...args);
+    });
+
+    try {
+      const temporaryLink = `${zonesPath}.tmp`;
+      fs.symlinkSync(targetPath, temporaryLink);
+      fs.renameSync(temporaryLink, zonesPath);
+      await waitFor(() => watch.mock.calls.some(([directoryPath]) => directoryPath === resolvedTargetDirectory));
+      expect(onError).toHaveBeenCalledWith(watchError);
+      expect(onReload).not.toHaveBeenCalled();
+    } finally {
+      watch.mockRestore();
+    }
+  });
 });
 
 async function waitFor(condition) {
