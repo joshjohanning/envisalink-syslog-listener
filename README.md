@@ -119,7 +119,11 @@ nano rules.json
 
 > **Note:** Unlike `zones.json`, `rules.json` is **not** auto-created on startup. Rules are optional -- the app works fine without them.
 
-> **Note:** Changes to `rules.json` require a restart of the app or service to take effect.
+> **Note:** The configured rules file (`--rulesPath`, default `rules.json`) hot-reloads without restarting, including when it is created after startup. Atomic replacements are supported and rapid writes are debounced. Invalid or missing files produce a warning and retain the last valid rules; use `[]` to remove all rules.
+
+Reloads preserve zone open/closed state, bypasses, and unchanged rules' active alerts. Removed or disabled rules lose their timers and pending close notifications. Edited rules use the updated notification channel, including for the final close notification. For already-open zones, new or edited initial timers count from the original opening time; repeat timers count from the last alert attempt (including bypass-suppressed attempts), preserving repeat progress and applying the updated `maxRepeats`. Overdue timers run immediately. Changing only notification settings does not resend an initial alert that already fired. Unchanged rules are matched first regardless of array order; edited rules are matched by zone and condition, in array order if multiple rules share a zone.
+
+Rules must be a JSON array of objects with a numeric zone, `condition: "open_duration"`, and a supported `action`. `minutes` defaults to 20 and must be positive when specified; `repeatInterval` must be nonnegative (`0` disables repeats), and `maxRepeats` must be a nonnegative integer. Timing values are in minutes and must fit Node.js's timer limit (about 35,791 minutes). Disabled rules are validated too.
 
 ### Supported conditions
 

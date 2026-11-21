@@ -16,7 +16,7 @@ function parseZonesConfig(raw) {
   return zones;
 }
 
-function watchZonesConfig(zonesPath, { onReload, onError, debounceMs = 100 }) {
+function watchZonesConfig(zonesPath, { onReload, onError, debounceMs = 100, parseConfig = parseZonesConfig }) {
   const absolutePath = path.resolve(zonesPath);
   const zonesDirectory = path.dirname(absolutePath);
   const zonesFilename = path.basename(absolutePath);
@@ -78,7 +78,7 @@ function watchZonesConfig(zonesPath, { onReload, onError, debounceMs = 100 }) {
       let zones;
       try {
         refreshWatchers();
-        zones = parseZonesConfig(fs.readFileSync(absolutePath, 'utf8'));
+        zones = parseConfig(fs.readFileSync(absolutePath, 'utf8'));
       } catch (err) {
         onError(err);
         return;
