@@ -42,6 +42,7 @@
 const dgram = require('dgram');
 const fs = require('fs');
 const path = require('path');
+const { isDeepStrictEqual } = require('util');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const { parseSyslogMessage, getZoneName } = require('./parser');
@@ -333,7 +334,7 @@ function reloadRules(updatedRules) {
   const remaining = new Set(rules);
   // Match unchanged rules first so reordering/removing entries preserves their state.
   const replacements = updatedRules.map(rule => {
-    const previous = [...remaining].find(old => JSON.stringify(old) === JSON.stringify(rule));
+    const previous = [...remaining].find(old => isDeepStrictEqual(old, rule));
     if (previous) remaining.delete(previous);
     return { rule, previous };
   });
@@ -345,7 +346,7 @@ function reloadRules(updatedRules) {
   }
   const oldRules = rules;
   rules = replacements.map(({ rule, previous }) => {
-    if (previous && JSON.stringify(previous) === JSON.stringify(rule)) return previous;
+    if (previous && isDeepStrictEqual(previous, rule)) return previous;
     ruleIds.set(rule, previous ? ruleIds.get(previous) : nextRuleId++);
     return rule;
   });

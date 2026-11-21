@@ -322,6 +322,22 @@ test('enables already-open zones and disables active alerts without stale close 
     });
 }, 15000);
 
+test('reordering same-zone rules and JSON fields preserves the correct active alert', async () => {
+  const first = durationRule(2, { description: 'Short push alert' });
+  const second = durationRule(2, { minutes: 0.08, action: 'email', description: 'Long email alert' });
+  await withRulesListener([first, second], async ({ send, log, waitFor, reload }) => {
+    await send('Zone Open: 2');
+    await waitFor(() => log().includes('Would send ntfy: Back Door open'), 'short alert');
+    const reverseFields = rule => Object.fromEntries(Object.entries(rule).reverse());
+    await reload([reverseFields(second), reverseFields(first)]);
+    await pause(200);
+    expect((log().match(/Alert rule triggered: Back Door/g) || []).length).toBe(1);
+    await send('Zone Close: 2');
+    await waitFor(() => log().includes('Would send ntfy: ✅ Back Door'), 'preserved close channel');
+    expect(log()).not.toContain('Would send email: ✅ Back Door');
+  }, { dryRun: true });
+}, 15000);
+
 async function freePort() {
   const server = net.createServer();
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
