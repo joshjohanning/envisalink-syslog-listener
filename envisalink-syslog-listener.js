@@ -42,10 +42,12 @@
 const dgram = require('dgram');
 const fs = require('fs');
 const path = require('path');
+const { isDeepStrictEqual } = require('util');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const { parseSyslogMessage, getZoneName } = require('./parser');
 const { parseZonesConfig, watchZonesConfig } = require('./zone-config');
+const { parseRulesConfig } = require('./rules-config');
 const BypassServer = require('./bypass-server');
 
 const argv = yargs(hideBin(process.argv))
@@ -122,7 +124,7 @@ let rules = [];
 if (fs.existsSync(RULES_PATH)) {
   try {
     const raw = fs.readFileSync(RULES_PATH, 'utf8');
-    const allRules = JSON.parse(raw);
+    const allRules = parseRulesConfig(raw);
     rules = allRules.filter(r => r.enabled !== false);
     const skipped = allRules.length - rules.length;
     logToFile(`Loaded ${rules.length} alert rule(s) from ${RULES_PATH}${skipped > 0 ? ` (${skipped} disabled)` : ''}`);
@@ -161,6 +163,25 @@ const zoneOpenTimers = {};    // "zone:ruleIndex" -> setTimeout ID
 const zoneOpenTimes = {};     // zone -> Date when opened
 const zoneRepeatCounts = {};  // "zone:ruleIndex" -> number of repeat alerts sent
 const zoneAlertFired = {};    // "zone:ruleIndex" -> rule object (set when first alert fires)
+const zoneRuleAttempts = {};  // "zone:ruleIndex" -> last attempt time and repeat count
+const ruleIds = new WeakMap();
+let nextRuleId = 0;
+for (const rule of rules) ruleIds.set(rule, nextRuleId++);
+
+try {
+  watchZonesConfig(RULES_PATH, {
+    parseConfig: parseRulesConfig,
+    onReload: (allRules) => {
+      reloadRules(allRules.filter(rule => rule.enabled !== false));
+      logToFile(`Reloaded ${rules.length} alert rule(s) from ${RULES_PATH} (${rules.length} enabled, ${allRules.length - rules.length} disabled)`);
+    },
+    onError: (err) => {
+      logToFile(`Warning: Could not reload rules file (${RULES_PATH}): ${err.message}. Retaining the last valid rules.`);
+    }
+  });
+} catch (err) {
+  logToFile(`Warning: Could not watch rules file (${RULES_PATH}): ${err.message}. Hot reload is unavailable.`);
+}
 
 // ---- Helpers ----
 
@@ -309,17 +330,67 @@ async function sendNtfy(title, message, priority) {
 
 // ---- Alert rules engine ----
 
+function reloadRules(updatedRules) {
+  const remaining = new Set(rules);
+  // Match unchanged rules first so reordering/removing entries preserves their state.
+  const replacements = updatedRules.map(rule => {
+    const previous = [...remaining].find(old => isDeepStrictEqual(old, rule));
+    if (previous) remaining.delete(previous);
+    return { rule, previous };
+  });
+  for (const replacement of replacements) {
+    if (replacement.previous) continue;
+    replacement.previous = [...remaining].find(old =>
+      String(old.zone) === String(replacement.rule.zone) && old.condition === replacement.rule.condition);
+    if (replacement.previous) remaining.delete(replacement.previous);
+  }
+  const oldRules = rules;
+  rules = replacements.map(({ rule, previous }) => {
+    if (previous && isDeepStrictEqual(previous, rule)) return previous;
+    ruleIds.set(rule, previous ? ruleIds.get(previous) : nextRuleId++);
+    return rule;
+  });
+
+  for (const old of oldRules) {
+    if (rules.includes(old)) continue;
+    const key = `${old.zone}:${ruleIds.get(old)}`;
+    clearTimeout(zoneOpenTimers[key]);
+    delete zoneOpenTimers[key];
+    const replacement = rules.find(rule => ruleIds.get(rule) === ruleIds.get(old));
+    if (replacement) {
+      if (zoneAlertFired[key]) zoneAlertFired[key] = replacement;
+    } else {
+      delete zoneAlertFired[key];
+      delete zoneRepeatCounts[key];
+      delete zoneRuleAttempts[key];
+    }
+  }
+  for (const rule of rules) {
+    if (oldRules.includes(rule)) continue;
+    const zoneKey = String(rule.zone);
+    const openedAt = zoneOpenTimes[zoneKey];
+    if (!openedAt) continue;
+    const key = `${zoneKey}:${ruleIds.get(rule)}`;
+    const attempt = zoneRuleAttempts[key];
+    const repeatCount = attempt ? attempt.repeatCount + 1 : 0;
+    if (attempt && (!rule.repeatInterval || (rule.maxRepeats && repeatCount > rule.maxRepeats))) continue;
+    const dueAt = attempt
+      ? attempt.at + rule.repeatInterval * 60000
+      : openedAt.getTime() + (rule.minutes || 20) * 60000;
+    startRuleTimer(zoneKey, rule, ruleIds.get(rule), Math.max(0, dueAt - Date.now()), repeatCount);
+  }
+}
+
 function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
   const timerKey = `${zoneKey}:${ruleIndex}`;
+  const openedAt = zoneOpenTimes[zoneKey];
+  const isCurrent = () => rules.includes(rule) && zoneOpenTimers[timerKey] === timer
+    && zoneOpenTimes[zoneKey] === openedAt;
 
-  zoneOpenTimers[timerKey] = setTimeout(async () => {
+  const timer = setTimeout(async () => {
     // Guard: zone may have closed (or re-opened) while we were waiting
-    const openedAt = zoneOpenTimes[zoneKey];
-    if (!openedAt) {
-      delete zoneOpenTimers[timerKey];
-      delete zoneRepeatCounts[timerKey];
-      return;
-    }
+    if (!openedAt || !isCurrent()) return;
+    zoneRuleAttempts[timerKey] = { at: Date.now(), repeatCount };
 
     const zoneName = getZoneNameLocal(zoneKey);
 
@@ -358,6 +429,7 @@ function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
       );
     }
     if (rule.action === 'ntfy' || rule.action === 'both') {
+      if (!isCurrent()) return;
       await sendNtfy(
         `${zoneName} ${isRepeat ? 'still ' : ''}open ${totalMinutes}+ min`,
         `${isRepeat ? 'Still open' : 'Open'} since ${formatLocalTime(openedAt)}`,
@@ -370,6 +442,7 @@ function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
     const nextRepeat = repeatCount + 1;
     const maxRepeats = rule.maxRepeats || 0;  // 0 = unlimited
 
+    if (!isCurrent()) return;
     if (repeatIntervalMs > 0 && (maxRepeats === 0 || nextRepeat <= maxRepeats)
         && zoneOpenTimes[zoneKey] === openedAt) {
       zoneRepeatCounts[timerKey] = nextRepeat;
@@ -380,10 +453,11 @@ function startRuleTimer(zoneKey, rule, ruleIndex, delayMs, repeatCount) {
       delete zoneRepeatCounts[timerKey];
     }
   }, delayMs);
+  zoneOpenTimers[timerKey] = timer;
 }
 
 async function evaluateRules(parsed) {
-  if (rules.length === 0 || parsed.zone === null) return;
+  if (parsed.zone === null) return;
 
   const zoneKey = String(parsed.zone);
 
@@ -395,7 +469,7 @@ async function evaluateRules(parsed) {
 
     for (let i = 0; i < matchingRules.length; i++) {
       const rule = matchingRules[i];
-      const ruleIndex = rules.indexOf(rule);
+      const ruleIndex = ruleIds.get(rule);
       const timerKey = `${zoneKey}:${ruleIndex}`;
       const delayMs = (rule.minutes || 20) * 60 * 1000;
 
@@ -405,6 +479,7 @@ async function evaluateRules(parsed) {
       }
       delete zoneRepeatCounts[timerKey];
       delete zoneAlertFired[timerKey];
+      delete zoneRuleAttempts[timerKey];
 
       startRuleTimer(zoneKey, rule, ruleIndex, delayMs, 0);
 
@@ -440,6 +515,9 @@ async function evaluateRules(parsed) {
       }
     }
     delete zoneOpenTimes[zoneKey];
+    for (const key of Object.keys(zoneRuleAttempts)) {
+      if (key.startsWith(`${zoneKey}:`)) delete zoneRuleAttempts[key];
+    }
 
     if (DEBUG) logToFile(`Timer(s) cleared: zone ${zoneKey} closed${firedRules.length > 0 ? ' (close notification sent)' : ' before alert'}`);
 
