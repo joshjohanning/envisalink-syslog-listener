@@ -521,8 +521,12 @@ async function evaluateRules(parsed) {
 
     if (DEBUG) logToFile(`Timer(s) cleared: zone ${zoneKey} closed${firedRules.length > 0 ? ' (close notification sent)' : ' before alert'}`);
 
-    // Send "now closed" notifications using snapshots (no mutable state accessed after this point)
-    for (const rule of firedRules) {
+    // Resolve each fired rule by stable ID before every send so reloads during delivery
+    // skip removed/disabled rules and apply edited channels.
+    const currentRule = (ruleId) => rules.find(rule => ruleIds.get(rule) === ruleId);
+    for (const ruleId of firedRules.map(rule => ruleIds.get(rule))) {
+      let rule = currentRule(ruleId);
+      if (!rule) continue;
       const totalMs = openedAt ? closedAt.getTime() - openedAt.getTime() : 0;
       const totalMinutes = Math.round(totalMs / (60 * 1000));
       const durationText = openedAt ? ` after ${totalMinutes} minutes` : '';
@@ -534,6 +538,8 @@ async function evaluateRules(parsed) {
           `✅ ${zoneName} is now closed`,
           `${zoneName} has been closed${durationText}.\n\nOpened at: ${openedAt ? formatLocalTime(openedAt) : 'unknown'}\nClosed at: ${formatLocalTime(closedAt)}\nRule: ${rule.description || 'Open duration alert'}\nZone: ${zoneKey}`
         );
+        rule = currentRule(ruleId);
+        if (!rule) continue;
       }
       if (rule.action === 'ntfy' || rule.action === 'both') {
         await sendNtfy(

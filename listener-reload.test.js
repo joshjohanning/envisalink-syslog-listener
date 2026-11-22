@@ -302,6 +302,20 @@ test('removal during an in-flight notification cannot resurrect stale repeat tim
     }, { responseDelay: 350 });
 }, 15000);
 
+test('removal during delayed close delivery skips remaining close notifications', async () => {
+  const rules = [durationRule(2, { description: 'First' }), durationRule(2, { description: 'Second' })];
+  await withRulesListener(rules, async ({ send, log, waitFor, reload }) => {
+    await send('Zone Open: 2');
+    await waitFor(() => (log().match(/Alert rule triggered: Back Door/g) || []).length === 2, 'both alerts');
+    await pause(400);
+    await send('Zone Close: 2');
+    await waitFor(() => log().includes('Zone closed notification: Back Door'), 'first close notification');
+    await reload([]);
+    await pause(700);
+    expect((log().match(/Zone closed notification: Back Door/g) || []).length).toBe(1);
+  }, { responseDelay: 350 });
+}, 15000);
+
 test('enables already-open zones and disables active alerts without stale close notifications', async () => {
   await withRulesListener([durationRule(2, { enabled: false }), durationRule(3)],
     async ({ send, log, waitFor, reload }) => {
