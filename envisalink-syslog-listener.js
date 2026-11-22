@@ -628,11 +628,14 @@ server.on('message', async (msg, rinfo) => {
 
   logToFile(logLine);
 
-  // Post to Google Sheets
-  await postToGoogleSheets(parsed);
+  // Start the Google Sheets post, but update rule state before awaiting the
+  // webhook so a slow response cannot reorder overlapping zone events.
+  const sheetsPost = postToGoogleSheets(parsed);
 
   // Evaluate alert rules (e.g., zone open too long)
   await evaluateRules(parsed);
+
+  await sheetsPost;
 
   // Send email alerts based on configuration (skip if zone is bypassed)
   const zoneBypassedForAlerts = parsed.zone !== null && bypassServer.isBypassed(String(parsed.zone));
