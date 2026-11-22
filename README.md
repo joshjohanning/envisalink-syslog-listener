@@ -123,7 +123,7 @@ nano rules.json
 
 Reloads preserve zone open/closed state, bypasses, and unchanged rules' active alerts. Removed or disabled rules lose their timers and pending close notifications. Edited rules use the updated notification channel, including for the final close notification. For already-open zones, new or edited initial timers count from the original opening time; repeat timers count from the last alert attempt (including bypass-suppressed attempts), preserving repeat progress and applying the updated `maxRepeats`. Overdue timers run immediately. Changing only notification settings does not resend an initial alert that already fired. Unchanged rules are matched first regardless of array order; edited rules are matched by zone and condition, in array order if multiple rules share a zone.
 
-Rules must be a JSON array of objects with a numeric zone, `condition: "open_duration"`, and a supported `action`. `minutes` defaults to 20 and must be positive when specified; `repeatInterval` must be nonnegative (`0` disables repeats), and `maxRepeats` must be a nonnegative integer. Timing values are in minutes and must fit Node.js's timer limit (about 35,791 minutes). Disabled rules are validated too.
+Rules must be a JSON array of objects with a numeric zone, `condition: "open_duration"`, and a supported `action`. `minutes` defaults to 20 and must be positive when specified; `repeatInterval` must be nonnegative (`0` disables repeats), and `maxRepeats` must be a nonnegative integer. Timing values are in minutes and must fit Node.js's timer limit (about 35,791 minutes). Disabled rules (`"enabled": false`) are not validated, so incomplete drafts can stay in the file.
 
 ### Supported conditions
 

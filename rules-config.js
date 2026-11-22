@@ -3,6 +3,7 @@ function parseRulesConfig(raw) {
   if (!Array.isArray(rules)) throw new Error('rules configuration must be a JSON array');
 
   for (const [index, rule] of rules.entries()) {
+    if (rule && typeof rule === 'object' && !Array.isArray(rule) && rule.enabled === false) continue;
     if (!rule || typeof rule !== 'object' || Array.isArray(rule)
         || !['string', 'number'].includes(typeof rule.zone) || !/^\d+$/.test(String(rule.zone))
         || rule.condition !== 'open_duration'

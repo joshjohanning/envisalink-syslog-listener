@@ -15,10 +15,14 @@ test.each([
   ...['minutes', 'repeatInterval', 'maxRepeats'].flatMap(field =>
     [-1, '2', null].map(value => [{ ...rule, [field]: value }])),
   [{ ...rule, minutes: 0 }], [{ ...rule, minutes: 40000 }],
-  [{ ...rule, repeatInterval: 40000 }], [{ ...rule, maxRepeats: 1.5 }],
-  [{ ...rule, enabled: false, action: 'invalid' }]
+  [{ ...rule, repeatInterval: 40000 }], [{ ...rule, maxRepeats: 1.5 }]
 ])('rejects invalid configuration: %j', config => {
   expect(() => parseRulesConfig(JSON.stringify(config))).toThrow();
+});
+
+test('ignores incomplete or invalid disabled rules', () => {
+  const rules = [rule, { enabled: false, zone: '3', condition: 'open_duration' }, { ...rule, enabled: false, action: 'invalid' }];
+  expect(parseRulesConfig(JSON.stringify(rules))).toEqual(rules);
 });
 
 test('rejects malformed JSON and non-finite timing', () => {
