@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const dgram = require('dgram');
 const fs = require('fs');
+const net = require('net');
 const os = require('os');
 const path = require('path');
 
@@ -50,9 +51,10 @@ test('a slow Google Sheets response does not reorder zone open and close rule ha
     fs.writeFileSync(rulesPath, JSON.stringify([
       { zone: '2', condition: 'open_duration', minutes: 0.025, action: 'ntfy' }
     ]));
+    const apiPort = await freePort();
     listener = spawn(process.execPath, [
       '-e', mockHttps, path.join(__dirname, 'envisalink-syslog-listener.js'),
-      '--port=0', '--apiPort=0', `--zonesPath=${path.join(directory, 'zones.json')}`,
+      '--port=0', `--apiPort=${apiPort}`, `--zonesPath=${path.join(directory, 'zones.json')}`,
       `--rulesPath=${rulesPath}`, `--logPath=${logPath}`,
       `--bypassPath=${path.join(directory, 'bypasses.json')}`, '--debug'
     ], {
@@ -66,7 +68,8 @@ test('a slow Google Sheets response does not reorder zone open and close rule ha
     listener.stdout.on('data', chunk => { output += chunk; });
     listener.stderr.on('data', chunk => { output += chunk; });
 
-    await waitFor(() => /listener started on UDP port \d+/.test(output), 'listener startup');
+    await waitFor(() => /listener started on UDP port \d+/.test(output)
+      && log().includes(`Bypass API server listening on 127.0.0.1:${apiPort}`), 'listener startup');
     const udpPort = Number(output.match(/listener started on UDP port (\d+)/)[1]);
 
     await sendMessage(udpPort, 'Zone Open: 2');
@@ -90,6 +93,14 @@ test('a slow Google Sheets response does not reorder zone open and close rule ha
     fs.rmSync(directory, { recursive: true, force: true });
   }
 }, 20000);
+
+async function freePort() {
+  const server = net.createServer();
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  await new Promise(resolve => server.close(resolve));
+  return port;
+}
 
 function sendMessage(port, message) {
   return new Promise((resolve, reject) => {
