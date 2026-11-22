@@ -276,8 +276,8 @@ test('updates repeat timing, limits, and notification settings without losing fi
       await waitFor(() => log().includes('Would send ntfy: Back Door open'), 'initial notification');
       const updated = durationRule(2, { minutes: 0.05, repeatInterval: 0.003, maxRepeats: 1, action: 'email' });
       await reload([updated]);
-      await waitFor(() => /Back Door still open.*repeat 1/.test(log()), 'updated repeat interval');
-      expect(log()).toContain('Would send email: ⚠️ Back Door still open');
+      await waitFor(() => /Back Door still open.*repeat 1/.test(log())
+        && log().includes('Would send email: ⚠️ Back Door still open'), 'updated repeat interval');
       await reload([durationRule(3), updated]);
       await pause(400);
       expect((log().match(/Alert rule triggered: Back Door/g) || []).length).toBe(2);
